@@ -1,0 +1,27 @@
+package com.lumera.app
+
+import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
+
+@HiltAndroidApp
+class LumeraApplication : Application(), ImageLoaderFactory {
+    
+    @Inject
+    lateinit var imageLoader: ImageLoader
+    
+    @Inject
+    lateinit var startupOptimizer: StartupOptimizer
+    
+    override fun onCreate() {
+        super.onCreate()
+        // Start warmup immediately on app launch
+        // This primes the image decoder pool and memory cache
+        // while the user is still on the profile selection screen
+        startupOptimizer.warmup()
+    }
+    
+    override fun newImageLoader(): ImageLoader = imageLoader
+}

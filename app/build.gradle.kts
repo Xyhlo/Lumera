@@ -1,0 +1,127 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    // Apply the Compose Compiler plugin
+    alias(libs.plugins.kotlin.compose)
+
+    id("kotlin-kapt")
+    id("com.google.dagger.hilt.android")
+
+}
+
+android {
+    namespace = "com.lumera.app"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.lumera.app"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0.0-alpha"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        compose = true
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+// Compose Compiler configuration for optimal performance
+composeCompiler {
+    // Enable strong skipping mode for more efficient recomposition
+    // Skips recomposition when parameters are stable even if equals() isn't overridden
+    enableStrongSkippingMode = true
+
+    // Enable intrinsic remember optimization
+    enableIntrinsicRemember = true
+
+    // Stability configuration: tells the compiler which classes are effectively immutable
+    // so it can skip recomposition when their instances haven't changed
+    stabilityConfigurationFile = project.layout.projectDirectory.file("compose_stability_config.conf")
+}
+
+dependencies {
+    // 1. Android TV UI (Compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+
+
+    implementation(libs.androidx.tv.foundation)
+    implementation(libs.androidx.tv.material)
+
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+
+    // 2. Networking
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // 4. Image Loading
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // 5. Database
+    implementation("androidx.room:room-runtime:2.7.0")
+    implementation("androidx.room:room-ktx:2.7.0")
+    implementation(libs.androidx.compose.animation.core)
+    kapt("androidx.room:room-compiler:2.7.0")
+
+    // 6. Dependency Injection
+    implementation("com.google.dagger:hilt-android:2.51.1")
+    kapt("com.google.dagger:hilt-android-compiler:2.51.1")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
+    // 7. Video Player
+    implementation(project(":playbackcore"))
+
+    // 8. Testing & Debugging
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // --- TORRENT ENGINE ---
+    implementation("com.frostwire:jlibtorrent:1.2.0.18")
+    implementation("com.frostwire:jlibtorrent-android-arm:1.2.0.18")
+    implementation("com.frostwire:jlibtorrent-android-arm64:1.2.0.18")
+    implementation("com.frostwire:jlibtorrent-android-x86:1.2.0.18")
+    implementation("com.frostwire:jlibtorrent-android-x86_64:1.2.0.18")
+
+    // --- LOCAL WEB SERVER ---
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+    // --- QR CODE GENERATION ---
+    implementation("com.google.zxing:core:3.5.2")
+
+    // --- ENCRYPTED SHARED PREFERENCES ---
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+}
