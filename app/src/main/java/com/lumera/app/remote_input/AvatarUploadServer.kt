@@ -16,6 +16,10 @@ class AvatarUploadServer(
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    companion object {
+        private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+    }
+
     override fun serve(session: IHTTPSession): Response {
         if (session.uri == "/ping") return DisconnectBanner.pingResponse()
         return when (session.method) {
@@ -453,23 +457,42 @@ class AvatarUploadServer(
         try {
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
-            
+
             val base64Image = session.parms["image"]
-            
+
             if (!base64Image.isNullOrBlank()) {
-                // Decode base64 to bytes
                 val imageBytes = Base64.decode(base64Image, Base64.DEFAULT)
-                
-                // Invoke callback on main thread
+
+                // Reject oversized uploads
+                if (imageBytes.size > MAX_IMAGE_SIZE) {
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Image too large (max 5 MB)")
+                }
+
+                // Validate image magic bytes (PNG or JPEG)
+                if (!isValidImage(imageBytes)) {
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid image format")
+                }
+
                 mainHandler.post {
                     onImageReceived(imageBytes)
                 }
             }
-            
+
             return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "OK")
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("AvatarUploadServer", "Error handling upload", e)
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error processing request")
         }
+    }
+
+    private fun isValidImage(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        // PNG: 89 50 4E 47
+        if (bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()) return true
+        // JPEG: FF D8 FF
+        if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()) return true
+        // WebP: RIFF....WEBP
+        if (bytes.size >= 12 && bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() && bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte()) return true
+        return false
     }
 }

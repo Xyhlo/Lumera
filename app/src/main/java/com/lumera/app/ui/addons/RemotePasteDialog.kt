@@ -184,7 +184,7 @@ private fun generateQrCode(url: String, size: Int = 512): Bitmap? {
         
         bitmap
     } catch (e: Exception) {
-        e.printStackTrace()
+        if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("RemotePasteDialog", "QR generation error", e)
         null
     }
 }

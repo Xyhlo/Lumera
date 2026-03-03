@@ -40,7 +40,7 @@ class IntegrationServerManager {
             } catch (e: BindException) {
                 continue
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("IntegrationServerManager", "Port binding failed", e)
                 continue
             }
         }

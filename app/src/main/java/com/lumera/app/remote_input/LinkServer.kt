@@ -1,8 +1,10 @@
 package com.lumera.app.remote_input
 
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import fi.iki.elonen.NanoHTTPD
+import java.util.UUID
 
 /**
  * A lightweight HTTP server that serves a mobile-friendly form
@@ -14,6 +16,7 @@ class LinkServer(
 ) : NanoHTTPD(port) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val csrfToken = UUID.randomUUID().toString()
 
     override fun serve(session: IHTTPSession): Response {
         if (session.uri == "/ping") return DisconnectBanner.pingResponse()
@@ -121,9 +124,10 @@ class LinkServer(
                     <h1>📋 Remote Paste</h1>
                     <p>Paste your addon URL below and tap Send</p>
                     <form id="pasteForm">
-                        <input type="url" name="url" id="urlInput" 
-                               placeholder="https://..." 
-                               autocomplete="off" 
+                        <input type="hidden" name="csrf_token" value="$csrfToken">
+                        <input type="url" name="url" id="urlInput"
+                               placeholder="https://..."
+                               autocomplete="off"
                                autocapitalize="off"
                                required>
                         <button type="submit" id="submitBtn">Send to TV</button>
@@ -169,19 +173,29 @@ class LinkServer(
         try {
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
-            
+
+            // Validate CSRF token
+            val token = session.parms["csrf_token"]
+            if (token != csrfToken) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "Invalid request")
+            }
+
             val url = session.parms["url"]
-            
+
             if (!url.isNullOrBlank()) {
-                // Invoke callback on main thread
+                // Validate URL scheme
+                val scheme = Uri.parse(url).scheme?.lowercase()
+                if (scheme != "http" && scheme != "https") {
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Only HTTP/HTTPS URLs are supported")
+                }
                 mainHandler.post {
                     onLinkReceived(url)
                 }
             }
-            
+
             return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "OK")
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("LinkServer", "Error handling submission", e)
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error processing request")
         }
     }

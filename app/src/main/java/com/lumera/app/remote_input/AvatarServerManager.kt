@@ -39,7 +39,7 @@ class AvatarServerManager {
                 // Port in use, try next
                 continue
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("AvatarServerManager", "Port binding failed", e)
                 continue
             }
         }

@@ -3,7 +3,9 @@ package com.lumera.app.remote_input
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.google.gson.JsonObject
 import fi.iki.elonen.NanoHTTPD
+import java.util.UUID
 
 /**
  * HTTP server for handling Stremio login from a mobile device.
@@ -15,9 +17,11 @@ class IntegrationServer(
 ) : NanoHTTPD(port) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val csrfToken = UUID.randomUUID().toString()
 
     companion object {
         private const val TAG = "IntegrationServer"
+        private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -174,12 +178,13 @@ class IntegrationServer(
                         <div class="error" id="error-msg"></div>
                         
                         <form id="loginForm">
-                            <input type="email" name="email" id="emailInput" 
-                                   placeholder="Stremio Email" 
+                            <input type="hidden" name="csrf_token" value="$csrfToken">
+                            <input type="email" name="email" id="emailInput"
+                                   placeholder="Stremio Email"
                                    autocomplete="email"
                                    required>
-                            <input type="password" name="password" id="passwordInput" 
-                                   placeholder="Password" 
+                            <input type="password" name="password" id="passwordInput"
+                                   placeholder="Password"
                                    autocomplete="current-password"
                                    required>
                             <button type="submit" id="submitBtn">Connect Account</button>
@@ -254,6 +259,12 @@ class IntegrationServer(
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
 
+            // Validate CSRF token
+            val token = session.parms["csrf_token"]
+            if (token != csrfToken) {
+                return jsonResponse(false, "Invalid request")
+            }
+
             val email = session.parms["email"]
             val password = session.parms["password"]
 
@@ -270,16 +281,15 @@ class IntegrationServer(
 
         } catch (e: Exception) {
             Log.e(TAG, "Error handling login", e)
-            return jsonResponse(false, "Server error: ${e.message}")
+            return jsonResponse(false, "Server error")
         }
     }
 
     private fun jsonResponse(success: Boolean, error: String?): Response {
-        val json = if (error != null) {
-            """{"success": $success, "error": "$error"}"""
-        } else {
-            """{"success": $success}"""
-        }
+        val json = JsonObject().apply {
+            addProperty("success", success)
+            if (error != null) addProperty("error", error)
+        }.toString()
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
     }
 }

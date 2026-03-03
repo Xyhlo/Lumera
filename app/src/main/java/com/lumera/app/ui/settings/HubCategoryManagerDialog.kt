@@ -291,7 +291,7 @@ fun HubCategoryManagerDialog(
                         currentItems = mutable
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("HubCategoryManagerDialog", "Image upload error", e)
                 }
             },
             onImageDeleted = { configId ->

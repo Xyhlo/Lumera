@@ -23,6 +23,12 @@ private val MIGRATION_26_27 = object : Migration(26, 27) {
     }
 }
 
+private val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Version 28: no-op migration (schema unchanged, version was bumped without migration)
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -42,8 +48,7 @@ object DatabaseModule {
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })
-            .addMigrations(MIGRATION_26_27)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_26_27, MIGRATION_27_28)
             .build()
     }
 

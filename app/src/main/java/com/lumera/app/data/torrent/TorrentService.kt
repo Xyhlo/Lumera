@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.lumera.app.BuildConfig
 import org.libtorrent4j.Priority
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentInfo
@@ -76,15 +77,15 @@ class TorrentService : Service() {
     private fun startDownload(magnet: String, fileIdx: Int) {
         downloadJob?.cancel()
         downloadJob = scope.launch {
-            Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
+            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
 
             try {
                 val session = engine.getSession()
                 val saveDir = engine.getDownloadPath(this@TorrentService)
 
                 // Diagnostics: check session state
-                Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
-                Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
 
                 // Wait for session to fully initialize (listeners + DHT)
                 var dhtWait = 0
@@ -95,20 +96,20 @@ class TorrentService : Service() {
                     val dhtRunning = session.isDhtRunning()
                     val dhtNodes = session.stats().dhtNodes()
                     if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
-                        Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
+                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
                     }
                     if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
                 }
-                Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
 
                 // Use fetchMagnet — the dedicated API for resolving magnet metadata
                 // This runs on Dispatchers.IO so blocking is OK
-                Log.d("LumeraTorrent", "Calling fetchMagnet (60s timeout)...")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (60s timeout)...")
                 val torrentData = session.fetchMagnet(magnet, 60, saveDir)
 
                 if (torrentData == null) {
                     Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
-                    Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
+                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
                     withContext(Dispatchers.Main) {
                         onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
                     }
@@ -116,7 +117,7 @@ class TorrentService : Service() {
                     return@launch
                 }
 
-                Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
 
                 // Add the torrent for downloading using the resolved metadata
                 val torrentInfo = TorrentInfo(torrentData)
@@ -166,14 +167,14 @@ class TorrentService : Service() {
                 handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
 
                 val targetFileSize = fileStorage.fileSize(targetFileIndex)
-                Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
                     "(${targetFileSize / 1024 / 1024} MB)")
 
                 // Phase 5: Wait for initial buffer
                 val minBytes = minOf(targetFileSize / 50, 2L * 1024 * 1024) // 2% or 2MB, whichever is smaller
                 val movieFile = File(saveDir, fileStorage.filePath(targetFileIndex))
 
-                Log.d("LumeraTorrent", "Waiting for initial buffer (${minBytes / 1024} KB)...")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for initial buffer (${minBytes / 1024} KB)...")
                 updateNotification("Buffering...")
 
                 attempts = 0
@@ -187,7 +188,7 @@ class TorrentService : Service() {
 
                     if (attempts % 10 == 0) {
                         val status = handle.status()
-                        Log.d("LumeraTorrent", "Buffer: ${(status.progress() * 100).toInt()}%, " +
+                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Buffer: ${(status.progress() * 100).toInt()}%, " +
                             "peers: ${status.numPeers()}, dl: ${status.downloadRate() / 1024} KB/s")
                     }
                 }
@@ -209,14 +210,14 @@ class TorrentService : Service() {
 
                 val fileName = movieFile.name
                 val localUrl = "http://127.0.0.1:${proxy.listeningPort}/$fileName"
-                Log.d("LumeraTorrent", "Stream ready at: $localUrl")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Stream ready at: $localUrl")
                 updateNotification("Streaming...")
 
                 withContext(Dispatchers.Main) {
                     onStreamReady?.invoke(localUrl)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
                 throw e // Don't call stopSelf — a new download is taking over
             } catch (e: Exception) {
                 Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
@@ -243,7 +244,7 @@ class TorrentService : Service() {
             streamProxy?.stop()
             streamProxy = null
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Error stopping proxy", e)
         }
     }
 

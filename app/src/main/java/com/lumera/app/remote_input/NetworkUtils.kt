@@ -27,7 +27,7 @@ object NetworkUtils {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("NetworkUtils", "Failed to get local IP", e)
         }
         return null
     }

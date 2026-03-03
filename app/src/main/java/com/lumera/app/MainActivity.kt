@@ -134,7 +134,11 @@ private fun resolveSubtitleUrl(rawUrl: String, addonTransportUrl: String?): Stri
     if (value.isEmpty()) return null
 
     val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return null
-    if (uri.isAbsolute) return value
+    if (uri.isAbsolute) {
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return null
+        return value
+    }
     if (addonTransportUrl.isNullOrBlank()) return null
 
     val base = addonTransportUrl.trimEnd('/')
@@ -206,6 +210,11 @@ private fun sourceDisplayLabel(stream: Stream): String {
 
 private fun launchExternalPlayer(context: android.content.Context, url: String) {
     try {
+        val scheme = Uri.parse(url).scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") {
+            Toast.makeText(context, "Unsupported URL scheme", Toast.LENGTH_SHORT).show()
+            return
+        }
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1745,6 +1754,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
                 }
                 }
             }

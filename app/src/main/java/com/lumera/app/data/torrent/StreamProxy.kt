@@ -1,6 +1,7 @@
 package com.lumera.app.data.torrent
 
 import android.util.Log
+import com.lumera.app.BuildConfig
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
@@ -109,7 +110,7 @@ class StreamProxy(
         // Wait for the torrent to download the requested region
         val needed = end + 1
         if (file.length() < needed) {
-            Log.d("LumeraTorrent", "Proxy waiting for data: need $needed bytes, have ${file.length()}")
+            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Proxy waiting for data: need $needed bytes, have ${file.length()}")
             if (!waitForData(needed)) {
                 Log.w("LumeraTorrent", "Proxy timeout waiting for bytes $start-$end")
                 return newFixedLengthResponse(

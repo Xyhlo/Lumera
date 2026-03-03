@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +65,10 @@ class AppUpdateManager @Inject constructor(
 
     private val gson = Gson()
 
+    /** Cached release body from the last checkForUpdate, used for checksum extraction. */
+    @Volatile
+    private var lastReleaseBody: String? = null
+
     suspend fun checkForUpdate() {
         _state.value = UpdateState.Checking
         try {
@@ -79,6 +84,11 @@ class AppUpdateManager @Inject constructor(
             if (remoteVersion != currentVersion) {
                 val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk") }
                 if (apkAsset != null) {
+                    if (!isAllowedDownloadUrl(apkAsset.downloadUrl)) {
+                        _state.value = UpdateState.Error("Update URL is not from a trusted source.")
+                        return
+                    }
+                    lastReleaseBody = release.body
                     _state.value = UpdateState.UpdateAvailable(
                         UpdateInfo(
                             versionName = remoteVersion,
@@ -98,6 +108,10 @@ class AppUpdateManager @Inject constructor(
     }
 
     suspend fun downloadAndInstall(apkUrl: String) {
+        if (!isAllowedDownloadUrl(apkUrl)) {
+            _state.value = UpdateState.Error("Download URL is not from a trusted source.")
+            return
+        }
         _state.value = UpdateState.Downloading(0f)
         try {
             val apkFile = withContext(Dispatchers.IO) { downloadApk(apkUrl) }
@@ -138,6 +152,7 @@ class AppUpdateManager @Inject constructor(
 
         val totalBytes = response.body?.contentLength() ?: -1L
         var downloadedBytes = 0L
+        val digest = MessageDigest.getInstance("SHA-256")
 
         response.body?.byteStream()?.use { input ->
             apkFile.outputStream().use { output ->
@@ -145,11 +160,22 @@ class AppUpdateManager @Inject constructor(
                 var bytesRead: Int
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     output.write(buffer, 0, bytesRead)
+                    digest.update(buffer, 0, bytesRead)
                     downloadedBytes += bytesRead
                     if (totalBytes > 0) {
                         _state.value = UpdateState.Downloading(downloadedBytes.toFloat() / totalBytes)
                     }
                 }
+            }
+        }
+
+        // Verify checksum if one was provided in the release notes
+        val expectedHash = extractSha256FromBody(lastReleaseBody)
+        if (expectedHash != null) {
+            val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
+            if (!actualHash.equals(expectedHash, ignoreCase = true)) {
+                apkFile.delete()
+                throw SecurityException("APK checksum mismatch — file may be tampered")
             }
         }
 
@@ -173,5 +199,28 @@ class AppUpdateManager @Inject constructor(
 
     companion object {
         private const val KEY_UPDATE_POPUP_ENABLED = "update_popup_enabled"
+
+        /** Trusted domains for APK downloads. */
+        private val ALLOWED_DOWNLOAD_HOSTS = setOf(
+            "github.com",
+            "objects.githubusercontent.com"
+        )
+
+        /** Validate that the download URL is from a trusted GitHub domain. */
+        private fun isAllowedDownloadUrl(url: String): Boolean {
+            val host = try {
+                Uri.parse(url).host?.lowercase()
+            } catch (_: Exception) {
+                null
+            } ?: return false
+            return ALLOWED_DOWNLOAD_HOSTS.any { host == it || host.endsWith(".$it") }
+        }
+
+        /** Extract SHA-256 hash from release body. Expected format: `SHA-256: abcdef1234...` */
+        private fun extractSha256FromBody(body: String?): String? {
+            if (body == null) return null
+            val regex = Regex("""SHA-256:\s*([a-fA-F0-9]{64})""")
+            return regex.find(body)?.groupValues?.get(1)
+        }
     }
 }

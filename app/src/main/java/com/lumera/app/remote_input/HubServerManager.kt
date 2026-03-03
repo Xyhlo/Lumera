@@ -43,7 +43,7 @@ object HubServerManager {
             val ip = NetworkUtils.getLocalIpAddress()
             if (ip != null) "http://$ip:$port" else null
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("HubServerManager", "Server start failed", e)
             null
         }
     }

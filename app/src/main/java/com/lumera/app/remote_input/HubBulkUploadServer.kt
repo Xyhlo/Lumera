@@ -1,6 +1,8 @@
 package com.lumera.app.remote_input
 
 import android.util.Base64
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.domain.HubShape
 import fi.iki.elonen.NanoHTTPD
@@ -17,6 +19,10 @@ class HubBulkUploadServer(
     private val uploadedPreviews = mutableMapOf<String, String>()
     // Track images deleted during this session
     private val deletedIds = mutableSetOf<String>()
+
+    companion object {
+        private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+    }
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
@@ -56,17 +62,19 @@ class HubBulkUploadServer(
             }
         }
 
-        val itemsJson = items.joinToString(",") { item ->
-            val wasDeleted = item.configUniqueId in deletedIds
-            val hasImage = !wasDeleted && (item.customImageUrl != null || uploadedPreviews.containsKey(item.configUniqueId))
-            val hasPreview = uploadedPreviews.containsKey(item.configUniqueId)
-            val escapedTitle = item.title
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("<", "\\u003c")
-                .replace(">", "\\u003e")
-            """{"id":"${item.configUniqueId}","title":"$escapedTitle","hasImage":$hasImage,"hasPreview":$hasPreview}"""
-        }
+        val itemsJson = JsonArray().apply {
+            items.forEach { item ->
+                val wasDeleted = item.configUniqueId in deletedIds
+                val hasImage = !wasDeleted && (item.customImageUrl != null || uploadedPreviews.containsKey(item.configUniqueId))
+                val hasPreview = uploadedPreviews.containsKey(item.configUniqueId)
+                add(JsonObject().apply {
+                    addProperty("id", item.configUniqueId)
+                    addProperty("title", item.title)
+                    addProperty("hasImage", hasImage)
+                    addProperty("hasPreview", hasPreview)
+                })
+            }
+        }.toString()
 
         val html = """
             <!DOCTYPE html>
@@ -475,6 +483,14 @@ class HubBulkUploadServer(
             val base64Image = session.parms["image"]
             if (!base64Image.isNullOrBlank()) {
                 val imageBytes = Base64.decode(base64Image, Base64.DEFAULT)
+
+                if (imageBytes.size > MAX_IMAGE_SIZE) {
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Image too large (max 5 MB)")
+                }
+                if (!isValidImage(imageBytes)) {
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid image format")
+                }
+
                 uploadedPreviews[id] = base64Image
                 deletedIds.remove(id)
                 onImageReceived(id, imageBytes)
@@ -483,9 +499,20 @@ class HubBulkUploadServer(
 
             return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "No image data")
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("HubBulkUploadServer", "Error processing upload", e)
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error processing request")
         }
+    }
+
+    private fun isValidImage(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        // PNG
+        if (bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()) return true
+        // JPEG
+        if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()) return true
+        // WebP
+        if (bytes.size >= 12 && bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() && bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte()) return true
+        return false
     }
 
     private fun handleImageDelete(session: IHTTPSession): Response {
@@ -499,7 +526,7 @@ class HubBulkUploadServer(
             onImageDeleted?.invoke(id)
             return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "OK")
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("HubBulkUploadServer", "Error processing delete", e)
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error")
         }
     }

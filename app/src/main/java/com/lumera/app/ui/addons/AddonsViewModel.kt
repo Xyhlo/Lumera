@@ -55,6 +55,11 @@ class AddonsViewModel @Inject constructor(
 
     fun prepareInstall(url: String) {
         if (url.isBlank()) return
+        val scheme = android.net.Uri.parse(url).scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") {
+            _uiState.value = _uiState.value.copy(error = "Only HTTP/HTTPS addon URLs are supported")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {

@@ -79,7 +79,7 @@ fun HubBulkUploadDialog(
                     }
                     qrBitmap = bmp
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("HubBulkUploadDialog", "QR generation error", e)
                 }
             }
         }

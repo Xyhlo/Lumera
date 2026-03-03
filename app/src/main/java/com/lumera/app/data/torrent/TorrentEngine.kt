@@ -2,6 +2,7 @@ package com.lumera.app.data.torrent
 
 import android.content.Context
 import android.util.Log
+import com.lumera.app.BuildConfig
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
@@ -36,7 +37,7 @@ class TorrentEngine @Inject constructor() {
                     msg.contains("bind", ignoreCase = true)) {
                     Log.w("LumeraTorrent", "ALERT [$type]: $msg")
                 } else {
-                    Log.v("LumeraTorrent", "alert [$type]: $msg")
+                    if (BuildConfig.DEBUG) Log.v("LumeraTorrent", "alert [$type]: $msg")
                 }
             }
         })
@@ -56,12 +57,12 @@ class TorrentEngine @Inject constructor() {
         val params = SessionParams(settings)
         session.start(params)
 
-        Log.d("LumeraTorrent", "Endpoints after start: ${session.listenEndpoints()}")
+        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Endpoints after start: ${session.listenEndpoints()}")
 
         val savePath = File(context.getExternalFilesDir(null), "downloads")
         if (!savePath.exists()) savePath.mkdirs()
 
-        Log.d("LumeraTorrent", "Engine Started. Saving to: ${savePath.absolutePath}")
+        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Engine Started. Saving to: ${savePath.absolutePath}")
         isStarted = true
     }
 
