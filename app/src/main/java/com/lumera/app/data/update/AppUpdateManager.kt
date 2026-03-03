@@ -92,7 +92,7 @@ class AppUpdateManager @Inject constructor(
                     _state.value = UpdateState.UpdateAvailable(
                         UpdateInfo(
                             versionName = remoteVersion,
-                            changelog = release.body?.trim() ?: "No changelog provided.",
+                            changelog = stripHashFromChangelog(release.body),
                             apkUrl = apkAsset.downloadUrl
                         )
                     )
@@ -221,6 +221,13 @@ class AppUpdateManager @Inject constructor(
             if (body == null) return null
             val regex = Regex("""SHA-256:\s*([a-fA-F0-9]{64})""")
             return regex.find(body)?.groupValues?.get(1)
+        }
+
+        /** Strip the SHA-256 line from the changelog shown to users. */
+        private fun stripHashFromChangelog(body: String?): String {
+            if (body == null) return "No changelog provided."
+            return body.replace(Regex("""(?m)^SHA-256:\s*[a-fA-F0-9]{64}\s*$"""), "").trim()
+                .ifEmpty { "No changelog provided." }
         }
     }
 }
