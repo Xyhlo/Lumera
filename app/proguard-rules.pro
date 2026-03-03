@@ -3,32 +3,22 @@
 # Keep line numbers for crash reports
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
-
-# ─── Retrofit + Gson ───
 -keepattributes Signature
 -keepattributes *Annotation*
 
-# Gson serialized classes (keep fields used by Gson)
--keep class com.lumera.app.data.remote.** { *; }
--keep class com.lumera.app.data.update.AppUpdateManager$* { *; }
--keep class com.lumera.app.data.model.** { *; }
--keep class com.lumera.app.data.model.stremio.** { *; }
+# ─── App code ───
+# Keep all app classes to prevent R8 class merging/obfuscation issues
+# with Room, Gson, and Hilt. R8 still shrinks unused code and
+# obfuscates third-party libraries.
+-keep class com.lumera.app.** { *; }
 
-# Retrofit interfaces
--keep,allowobfuscation interface com.lumera.app.data.remote.StremioApiService
--keep,allowobfuscation interface com.lumera.app.data.remote.IntroDbService
-
-# Prevent R8 from stripping Gson TypeToken
+# ─── Gson ───
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
 
 # ─── Room ───
 -keep class * extends androidx.room.RoomDatabase { *; }
--keep @androidx.room.Entity class * { *; }
--keep @androidx.room.Dao class * { *; }
-# Keep Room-generated DAO implementations (_Impl classes)
 -keep class *_Impl { *; }
--keep class com.lumera.app.data.local.** { *; }
 
 # ─── Hilt / Dagger ───
 -keep class dagger.hilt.** { *; }
@@ -48,7 +38,7 @@
 # ─── AndroidX Security (EncryptedSharedPreferences) ───
 -keep class androidx.security.crypto.** { *; }
 
-# ─── Compose (defaults handle most, but keep stability) ───
+# ─── Compose ───
 -dontwarn androidx.compose.**
 
 # ─── Media3 / ExoPlayer ───
