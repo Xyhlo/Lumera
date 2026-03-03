@@ -218,13 +218,11 @@ class IntegrationServer(
                         errorEl.style.display = 'none';
                         
                         try {
-                            const formData = new FormData();
-                            formData.append('email', email);
-                            formData.append('password', password);
-                            
-                            const response = await fetch('/login', { 
-                                method: 'POST', 
-                                body: formData 
+                            const formData = new FormData(document.getElementById('loginForm'));
+
+                            const response = await fetch('/login', {
+                                method: 'POST',
+                                body: formData
                             });
                             
                             const result = await response.json();

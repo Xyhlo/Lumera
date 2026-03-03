@@ -1,7 +1,6 @@
 package com.lumera.app.data.remote
 
 import com.google.gson.annotations.SerializedName
-import okhttp3.CertificatePinner
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -63,14 +62,7 @@ sealed class StremioAuthError : Exception() {
 @Singleton
 class StremioAuthService @Inject constructor() {
 
-    private val certificatePinner = CertificatePinner.Builder()
-        .add("api.strem.io", "sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=") // Let's Encrypt R3
-        .add("api.strem.io", "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=") // ISRG Root X1
-        .build()
-
-    private val client = OkHttpClient.Builder()
-        .certificatePinner(certificatePinner)
-        .build()
+    private val client = OkHttpClient.Builder().build()
     private val gson = Gson()
     private val jsonMediaType = "application/json".toMediaType()
     

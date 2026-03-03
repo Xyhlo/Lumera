@@ -45,6 +45,24 @@
 -keep class androidx.media3.** { *; }
 -dontwarn androidx.media3.**
 
+# ─── Retrofit ───
+# Keep generic signature and annotations for Retrofit + Gson
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+-keep class retrofit2.** { *; }
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+# R8 full mode strips generic signatures from return types if not kept.
+-if interface * { @retrofit2.http.* public *** *(...); }
+-keep,allowoptimization,allowshrinking,allowobfuscation class <3>
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+
+# Kotlin coroutines continuation (needed by Retrofit suspend functions)
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+
+# Kotlin Metadata (needed by Retrofit to understand suspend functions)
+-keep class kotlin.Metadata { *; }
+
 # ─── OkHttp ───
 -dontwarn okhttp3.**
 -dontwarn okio.**
