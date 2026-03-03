@@ -50,9 +50,9 @@ class StartupOptimizer @Inject constructor(
                 // This ensures the cache data structures are allocated
                 primeMemoryCache()
                 
-                Log.d(TAG, "Warmup complete - decoder pool primed")
+                if (com.lumera.app.BuildConfig.DEBUG) Log.d(TAG, "Warmup complete - decoder pool primed")
             } catch (e: Exception) {
-                Log.w(TAG, "Warmup failed (non-critical): ${e.message}")
+                if (com.lumera.app.BuildConfig.DEBUG) Log.w(TAG, "Warmup failed (non-critical): ${e.message}")
             }
         }
     }

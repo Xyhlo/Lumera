@@ -280,7 +280,7 @@ class IntegrationServer(
             return jsonResponse(true, null)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error handling login", e)
+            if (com.lumera.app.BuildConfig.DEBUG) Log.e(TAG, "Error handling login", e)
             return jsonResponse(false, "Server error")
         }
     }
