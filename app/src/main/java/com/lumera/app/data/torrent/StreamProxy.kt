@@ -28,7 +28,7 @@ class StreamProxy(
                 serveFullContent(fileLength, mimeType)
             }
         } catch (e: Exception) {
-            Log.e("LumeraTorrent", "StreamProxy serve error: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "StreamProxy serve error: ${e.message}")
             newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Stream error")
         }
     }
@@ -112,7 +112,7 @@ class StreamProxy(
         if (file.length() < needed) {
             if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Proxy waiting for data: need $needed bytes, have ${file.length()}")
             if (!waitForData(needed)) {
-                Log.w("LumeraTorrent", "Proxy timeout waiting for bytes $start-$end")
+                if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Proxy timeout waiting for bytes $start-$end")
                 return newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Data not yet available"
                 )

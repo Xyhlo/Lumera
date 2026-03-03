@@ -44,7 +44,7 @@ class TorrentService : Service() {
             engine.start(this)
             startDownload(magnetLink, fileIdx)
         } catch (e: Exception) {
-            Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
             scope.launch(Dispatchers.Main) {
                 onStreamError?.invoke("Failed to start torrent engine: ${e.message}")
             }
@@ -108,7 +108,7 @@ class TorrentService : Service() {
                 val torrentData = session.fetchMagnet(magnet, 60, saveDir)
 
                 if (torrentData == null) {
-                    Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
+                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
                     if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
                     withContext(Dispatchers.Main) {
                         onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
@@ -133,7 +133,7 @@ class TorrentService : Service() {
                 }
 
                 if (handle == null) {
-                    Log.e("LumeraTorrent", "Failed to get handle after metadata.")
+                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Failed to get handle after metadata.")
                     withContext(Dispatchers.Main) {
                         onStreamError?.invoke("Torrent not found. Check your connection.")
                     }
@@ -194,7 +194,7 @@ class TorrentService : Service() {
                 }
 
                 if (!movieFile.exists() || movieFile.length() < minBytes) {
-                    Log.e("LumeraTorrent", "Buffer timeout - not enough data received")
+                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Buffer timeout - not enough data received")
                     withContext(Dispatchers.Main) {
                         onStreamError?.invoke("Torrent has no seeders. Try a different source.")
                     }
@@ -220,7 +220,7 @@ class TorrentService : Service() {
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
                 throw e // Don't call stopSelf — a new download is taking over
             } catch (e: Exception) {
-                Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
+                if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     onStreamError?.invoke("Torrent error: ${e.message}")
                 }

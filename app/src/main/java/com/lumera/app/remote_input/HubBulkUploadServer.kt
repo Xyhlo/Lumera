@@ -6,6 +6,7 @@ import com.google.gson.JsonObject
 import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.domain.HubShape
 import fi.iki.elonen.NanoHTTPD
+import java.util.UUID
 
 class HubBulkUploadServer(
     port: Int,
@@ -19,6 +20,7 @@ class HubBulkUploadServer(
     private val uploadedPreviews = mutableMapOf<String, String>()
     // Track images deleted during this session
     private val deletedIds = mutableSetOf<String>()
+    private val csrfToken = UUID.randomUUID().toString()
 
     companion object {
         private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
@@ -340,7 +342,8 @@ class HubBulkUploadServer(
 
                     removeBtn.onclick = function() {
                         if (!confirm('Remove the image for this item?')) return;
-                        fetch('/delete?id=' + currentItemId, { method: 'POST' }).then(function(res) {
+                        var delForm = new FormData(); delForm.append('csrf_token', '${csrfToken}');
+                        fetch('/delete?id=' + currentItemId, { method: 'POST', body: delForm }).then(function(res) {
                             if (res.ok) {
                                 var item = items.find(function(i) { return i.id === currentItemId; });
                                 item.hasImage = false;
@@ -442,6 +445,7 @@ class HubBulkUploadServer(
                         var base64 = dataUrl.split(',')[1];
                         var formData = new FormData();
                         formData.append('image', base64);
+                        formData.append('csrf_token', '${csrfToken}');
                         fetch('/upload?id=' + currentItemId, { method: 'POST', body: formData })
                             .then(function(res) {
                                 if (res.ok) {
@@ -479,6 +483,11 @@ class HubBulkUploadServer(
 
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
+
+            val token = session.parms["csrf_token"]
+            if (token != csrfToken) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "Invalid request")
+            }
 
             val base64Image = session.parms["image"]
             if (!base64Image.isNullOrBlank()) {
@@ -519,6 +528,12 @@ class HubBulkUploadServer(
         try {
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
+
+            val token = session.parms["csrf_token"]
+            if (token != csrfToken) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "Invalid request")
+            }
+
             val id = session.parms["id"]
                 ?: return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "No ID")
             uploadedPreviews.remove(id)

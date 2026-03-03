@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import fi.iki.elonen.NanoHTTPD
+import java.util.UUID
 
 /**
  * A lightweight HTTP server that serves a mobile-friendly image upload page
@@ -15,6 +16,7 @@ class AvatarUploadServer(
 ) : NanoHTTPD(port) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val csrfToken = UUID.randomUUID().toString()
 
     companion object {
         private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
@@ -433,7 +435,8 @@ class AvatarUploadServer(
                             // Send to server
                             const formData = new FormData();
                             formData.append('image', base64Data);
-                            
+                            formData.append('csrf_token', '${csrfToken}');
+
                             await fetch('/', { method: 'POST', body: formData });
                             
                             cropStep.style.display = 'none';
@@ -457,6 +460,11 @@ class AvatarUploadServer(
         try {
             val files = mutableMapOf<String, String>()
             session.parseBody(files)
+
+            val token = session.parms["csrf_token"]
+            if (token != csrfToken) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "Invalid request")
+            }
 
             val base64Image = session.parms["image"]
 

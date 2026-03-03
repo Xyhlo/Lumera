@@ -241,7 +241,11 @@ class SubtitleRepository @Inject constructor(
     private fun resolveSubtitleUrl(rawUrl: String?, addonBaseUrl: String): String? {
         val urlValue = rawUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val uri = runCatching { Uri.parse(urlValue) }.getOrNull() ?: return null
-        if (uri.isAbsolute) return urlValue
+        if (uri.isAbsolute) {
+            val scheme = uri.scheme?.lowercase()
+            if (scheme != "http" && scheme != "https") return null
+            return urlValue
+        }
 
         val base = addonBaseUrl.trimEnd('/')
         val path = urlValue.trimStart('/')

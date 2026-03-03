@@ -35,7 +35,7 @@ class TorrentEngine @Inject constructor() {
                     msg.contains("listen", ignoreCase = true) ||
                     msg.contains("error", ignoreCase = true) ||
                     msg.contains("bind", ignoreCase = true)) {
-                    Log.w("LumeraTorrent", "ALERT [$type]: $msg")
+                    if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "ALERT [$type]: $msg")
                 } else {
                     if (BuildConfig.DEBUG) Log.v("LumeraTorrent", "alert [$type]: $msg")
                 }

@@ -127,7 +127,7 @@ class AddonRepository @Inject constructor(
     ): List<MetaItem> = withContext(Dispatchers.IO) {
         // Build extras as a single path segment joined by '&', matching Stremio protocol
         val extras = mutableListOf<String>()
-        if (!genre.isNullOrEmpty()) extras.add("genre=$genre")
+        if (!genre.isNullOrEmpty()) extras.add("genre=${java.net.URLEncoder.encode(genre, "UTF-8")}")
         if (skip > 0) extras.add("skip=$skip")
 
         val url = if (extras.isEmpty()) {
