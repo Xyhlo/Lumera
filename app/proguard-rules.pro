@@ -23,9 +23,12 @@
 -keep class * extends com.google.gson.reflect.TypeToken
 
 # ─── Room ───
--keep class * extends androidx.room.RoomDatabase
--keep @androidx.room.Entity class *
--keep @androidx.room.Dao class *
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep @androidx.room.Entity class * { *; }
+-keep @androidx.room.Dao class * { *; }
+# Keep Room-generated DAO implementations (_Impl classes)
+-keep class *_Impl { *; }
+-keep class com.lumera.app.data.local.** { *; }
 
 # ─── Hilt / Dagger ───
 -keep class dagger.hilt.** { *; }
