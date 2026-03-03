@@ -10,8 +10,10 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.frostwire.jlibtorrent.Priority
-import com.frostwire.jlibtorrent.AddTorrentParams
+import org.libtorrent4j.Priority
+import org.libtorrent4j.TorrentFlags
+import org.libtorrent4j.TorrentInfo
+
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.io.File
@@ -25,21 +27,27 @@ class TorrentService : Service() {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
     private var streamProxy: StreamProxy? = null
+    private var downloadJob: Job? = null
 
     companion object {
         var onStreamReady: ((String) -> Unit)? = null
+        var onStreamError: ((String) -> Unit)? = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val magnetLink = intent?.getStringExtra("MAGNET_LINK") ?: return START_NOT_STICKY
+        val fileIdx = intent.getIntExtra("FILE_IDX", -1)
 
         try {
             startForegroundService()
             engine.start(this)
-            startDownload(magnetLink)
+            startDownload(magnetLink, fileIdx)
         } catch (e: Exception) {
             Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
-            stopSelf() // Stop correctly if we crash
+            scope.launch(Dispatchers.Main) {
+                onStreamError?.invoke("Failed to start torrent engine: ${e.message}")
+            }
+            stopSelf()
         }
 
         return START_STICKY
@@ -58,99 +66,176 @@ class TorrentService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .build()
 
-        // --- FIX FOR ANDROID 14 CRASH ---
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(1, notification)
         }
-        // --------------------------------
     }
 
-    private fun startDownload(magnet: String) {
-        scope.launch {
-            Log.d("LumeraTorrent", "Adding magnet...")
+    private fun startDownload(magnet: String, fileIdx: Int) {
+        downloadJob?.cancel()
+        downloadJob = scope.launch {
+            Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
 
             try {
                 val session = engine.getSession()
                 val saveDir = engine.getDownloadPath(this@TorrentService)
 
-                // 1. Parse Magnet
-                val params = AddTorrentParams.parseMagnetUri(magnet)
-                val infoHash = params.infoHash()
+                // Diagnostics: check session state
+                Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
+                Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
 
-                // 2. Start Download
-                session.download(magnet, saveDir)
+                // Wait for session to fully initialize (listeners + DHT)
+                var dhtWait = 0
+                while (dhtWait < 15) {
+                    delay(1000)
+                    dhtWait++
+                    val endpoints = session.listenEndpoints()
+                    val dhtRunning = session.isDhtRunning()
+                    val dhtNodes = session.stats().dhtNodes()
+                    if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
+                        Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
+                    }
+                    if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
+                }
+                Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
 
-                // 3. Find Handle
-                var handle: com.frostwire.jlibtorrent.TorrentHandle? = null
+                // Use fetchMagnet — the dedicated API for resolving magnet metadata
+                // This runs on Dispatchers.IO so blocking is OK
+                Log.d("LumeraTorrent", "Calling fetchMagnet (60s timeout)...")
+                val torrentData = session.fetchMagnet(magnet, 60, saveDir)
+
+                if (torrentData == null) {
+                    Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
+                    Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
+                    withContext(Dispatchers.Main) {
+                        onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
+                    }
+                    stopSelf()
+                    return@launch
+                }
+
+                Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
+
+                // Add the torrent for downloading using the resolved metadata
+                val torrentInfo = TorrentInfo(torrentData)
+                session.download(torrentInfo, saveDir)
+
+                // Get the handle
+                var handle: org.libtorrent4j.TorrentHandle? = null
                 var attempts = 0
-
                 while (handle == null && attempts < 20) {
-                    handle = session.find(infoHash)
+                    handle = session.find(torrentInfo.infoHash())
                     delay(500)
                     attempts++
                 }
 
                 if (handle == null) {
-                    Log.e("LumeraTorrent", "Failed to get handle.")
+                    Log.e("LumeraTorrent", "Failed to get handle after metadata.")
+                    withContext(Dispatchers.Main) {
+                        onStreamError?.invoke("Torrent not found. Check your connection.")
+                    }
                     stopSelf()
                     return@launch
                 }
 
-                Log.d("LumeraTorrent", "Metadata wait...")
+                // Phase 3: Select file and set priorities
+                val numFiles = torrentInfo.numFiles()
+                val fileStorage = torrentInfo.files()
 
-                // 4. Wait for Metadata
+                val targetFileIndex = if (fileIdx in 0 until numFiles) {
+                    fileIdx
+                } else {
+                    var largestIdx = 0
+                    var largestSize = 0L
+                    for (i in 0 until numFiles) {
+                        if (fileStorage.fileSize(i) > largestSize) {
+                            largestSize = fileStorage.fileSize(i)
+                            largestIdx = i
+                        }
+                    }
+                    largestIdx
+                }
+
+                val priorities = Array(numFiles) { Priority.IGNORE }
+                priorities[targetFileIndex] = Priority.TOP_PRIORITY
+                handle.prioritizeFiles(priorities)
+
+                // Phase 4: Enable sequential download for streaming
+                handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
+
+                val targetFileSize = fileStorage.fileSize(targetFileIndex)
+                Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
+                    "(${targetFileSize / 1024 / 1024} MB)")
+
+                // Phase 5: Wait for initial buffer
+                val minBytes = minOf(targetFileSize / 50, 2L * 1024 * 1024) // 2% or 2MB, whichever is smaller
+                val movieFile = File(saveDir, fileStorage.filePath(targetFileIndex))
+
+                Log.d("LumeraTorrent", "Waiting for initial buffer (${minBytes / 1024} KB)...")
+                updateNotification("Buffering...")
+
                 attempts = 0
-                while (!handle.status().hasMetadata() && attempts < 60) {
+                val maxBufferWait = 120
+                while (attempts < maxBufferWait) {
+                    if (movieFile.exists() && movieFile.length() >= minBytes) {
+                        break
+                    }
                     delay(1000)
                     attempts++
-                }
 
-                if (!handle.status().hasMetadata()) {
-                    Log.e("LumeraTorrent", "No metadata found.")
-                    stopSelf()
-                    return@launch
-                }
-
-                // 5. Select Largest File
-                val torrentInfo = handle.torrentFile()
-                val numFiles = torrentInfo.numFiles()
-                var largestFileIndex = 0
-                var largestFileSize = 0L
-
-                for (i in 0 until numFiles) {
-                    if (torrentInfo.files().fileSize(i) > largestFileSize) {
-                        largestFileSize = torrentInfo.files().fileSize(i)
-                        largestFileIndex = i
+                    if (attempts % 10 == 0) {
+                        val status = handle.status()
+                        Log.d("LumeraTorrent", "Buffer: ${(status.progress() * 100).toInt()}%, " +
+                            "peers: ${status.numPeers()}, dl: ${status.downloadRate() / 1024} KB/s")
                     }
                 }
 
-                // 6. Set Priority
-                val priorities = Array(numFiles) { Priority.IGNORE }
-                priorities[largestFileIndex] = Priority.SEVEN
-                handle.prioritizeFiles(priorities)
+                if (!movieFile.exists() || movieFile.length() < minBytes) {
+                    Log.e("LumeraTorrent", "Buffer timeout - not enough data received")
+                    withContext(Dispatchers.Main) {
+                        onStreamError?.invoke("Torrent has no seeders. Try a different source.")
+                    }
+                    stopSelf()
+                    return@launch
+                }
 
-                // (Sequential download line removed to prevent errors)
-
-                // 7. Start Proxy
-                val movieFile = File(saveDir, torrentInfo.files().filePath(largestFileIndex))
+                // Phase 6: Start proxy and signal ready
                 stopProxy()
-                val proxy = StreamProxy(movieFile)
+                val proxy = StreamProxy(movieFile, targetFileSize)
                 proxy.start()
                 streamProxy = proxy
 
-                // 8. Ready!
-                val localUrl = "http://127.0.0.1:${proxy.listeningPort}"
+                val fileName = movieFile.name
+                val localUrl = "http://127.0.0.1:${proxy.listeningPort}/$fileName"
+                Log.d("LumeraTorrent", "Stream ready at: $localUrl")
+                updateNotification("Streaming...")
 
-                launch(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     onStreamReady?.invoke(localUrl)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
+                throw e // Don't call stopSelf — a new download is taking over
             } catch (e: Exception) {
-                Log.e("LumeraTorrent", "Error inside download loop: ${e.message}")
+                Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    onStreamError?.invoke("Torrent error: ${e.message}")
+                }
                 stopSelf()
             }
         }
+    }
+
+    private fun updateNotification(text: String) {
+        val channelId = "torrent_channel"
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Lumera Streaming")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .build()
+        getSystemService(NotificationManager::class.java)?.notify(1, notification)
     }
 
     private fun stopProxy() {
@@ -164,8 +249,11 @@ class TorrentService : Service() {
 
     override fun onDestroy() {
         stopProxy()
-        try { engine.stop() } catch (e: Exception) {}
+        downloadJob?.cancel()
+        try { engine.stop() } catch (_: Exception) {}
         job.cancel()
+        onStreamReady = null
+        onStreamError = null
         super.onDestroy()
     }
 

@@ -46,11 +46,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lumera.app.BuildConfig
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.ThemeEntity
+import com.lumera.app.data.update.AppUpdateManager
+import com.lumera.app.data.update.UpdateState
 import com.lumera.app.ui.details.GlassSidebarScaffold
 import com.lumera.app.ui.theme.ThemeManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Theme settings section - allows selecting preset or creating custom themes
@@ -113,8 +117,7 @@ fun ThemeSettings(
 fun PersonalizationSettings(
     currentProfile: ProfileEntity?,
     viewModel: SettingsViewModel,
-    onGoBack: () -> Unit,
-    isTopNav: Boolean = false
+    onGoBack: () -> Unit
 ) {
     if (currentProfile == null) return
 
@@ -150,8 +153,7 @@ fun PersonalizationSettings(
                 selectedOption = roundCorners,
                 onOptionSelected = { viewModel.updateRoundCorners(currentProfile.id, it) },
                 onBack = onGoBack,
-                blockUp = true,
-                onFocus = { viewModel.updateDescription("Choose round or sharp poster corners.") }
+                blockUp = true
             )
         }
         Spacer(Modifier.height(15.dp))
@@ -166,8 +168,7 @@ fun PersonalizationSettings(
                 selectedOption = hubRoundCorners,
                 onOptionSelected = { viewModel.updateHubRoundCorners(currentProfile.id, it) },
                 onBack = onGoBack,
-                blockUp = false,
-                onFocus = { viewModel.updateDescription("Choose round or sharp hub cards.") }
+                blockUp = false
             )
         }
         Spacer(Modifier.height(15.dp))
@@ -181,8 +182,7 @@ fun PersonalizationSettings(
                 selectedOption = currentProfile.continueWatchingShape,
                 onOptionSelected = { viewModel.updateContinueWatchingShape(currentProfile.id, it) },
                 onBack = onGoBack,
-                blockUp = false,
-                onFocus = { viewModel.updateDescription("Choose poster or landscape cards for the Continue Watching row.") }
+                blockUp = false
             )
         }
         Spacer(Modifier.height(15.dp))
@@ -196,8 +196,7 @@ fun PersonalizationSettings(
                 selectedOption = navPos,
                 onOptionSelected = { viewModel.updateNavPosition(currentProfile.id, it) },
                 onBack = onGoBack,
-                blockUp = false,
-                onFocus = { viewModel.updateDescription("Choose menu position.") }
+                blockUp = false
             )
         }
     }
@@ -210,8 +209,7 @@ fun PersonalizationSettings(
 fun PlaybackSettings(
     currentProfile: ProfileEntity?,
     viewModel: SettingsViewModel,
-    onGoBack: () -> Unit,
-    isTopNav: Boolean = false
+    onGoBack: () -> Unit
 ) {
     if (currentProfile == null) return
 
@@ -273,8 +271,7 @@ fun PlaybackSettings(
                 isChecked = currentProfile.tunnelingEnabled,
                 onCheckedChange = { viewModel.updateTunnelingEnabled(currentProfile.id, it) },
                 onBack = onGoBack,
-                blockUp = true,
-                onFocus = { viewModel.updateDescription("Tunneling provides better support for 4K/HDR content, but may not work on all devices.") }
+                blockUp = true
             )
 
             // DV7 → HEVC FALLBACK
@@ -283,8 +280,7 @@ fun PlaybackSettings(
                 subtitle = "Play DV7 content as HDR on compatible displays",
                 isChecked = currentProfile.mapDV7ToHevc,
                 onCheckedChange = { viewModel.updateMapDV7ToHevc(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Play Dolby Vision profile 7 content as HDR on compatible displays.") }
+                onBack = onGoBack
             )
 
             // FRAME RATE MATCHING
@@ -293,8 +289,7 @@ fun PlaybackSettings(
                 subtitle = "Match display refresh rate to video frame rate",
                 isChecked = currentProfile.frameRateMatching,
                 onCheckedChange = { viewModel.updateFrameRateMatching(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Switch display refresh rate to match video frame rate for smoother playback.") }
+                onBack = onGoBack
             )
 
             // DECODER PRIORITY
@@ -303,8 +298,7 @@ fun PlaybackSettings(
                 options = listOf("Device" to 0, "Prefer Device" to 1, "Prefer App" to 2),
                 selectedOption = currentProfile.decoderPriority,
                 onOptionSelected = { viewModel.updateDecoderPriority(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Choose whether to use device hardware decoders, prefer them, or prefer app (FFmpeg) decoders.") }
+                onBack = onGoBack
             )
 
             // PLAYER PREFERENCE
@@ -313,8 +307,7 @@ fun PlaybackSettings(
                 options = listOf("Internal" to "internal", "External" to "external", "Ask" to "ask"),
                 selectedOption = currentProfile.playerPreference,
                 onOptionSelected = { viewModel.updatePlayerPreference(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Choose whether to use the built-in player, an external app, or be asked each time.") }
+                onBack = onGoBack
             )
 
             // REMEMBER SOURCE SELECTION
@@ -323,8 +316,7 @@ fun PlaybackSettings(
                 subtitle = "Save your source choice and reuse it on resume",
                 isChecked = currentProfile.rememberSourceSelection,
                 onCheckedChange = { viewModel.updateRememberSourceSelection(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("When enabled, the source you pick is saved and automatically selected when you resume playback of the same content.") }
+                onBack = onGoBack
             )
 
             // AUTO-SELECT SOURCE
@@ -333,8 +325,7 @@ fun PlaybackSettings(
                 subtitle = "Automatically pick the first available source for new content",
                 isChecked = currentProfile.autoSelectSource,
                 onCheckedChange = { viewModel.updateAutoSelectSource(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("When no remembered source exists, automatically select the first playable source instead of showing the source picker.") }
+                onBack = onGoBack
             )
 
             // SKIP INTRO
@@ -343,8 +334,7 @@ fun PlaybackSettings(
                 subtitle = "Show a skip button during intro segments if available in IntroDB",
                 isChecked = currentProfile.skipIntro,
                 onCheckedChange = { viewModel.updateSkipIntro(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Show a Skip Intro button during intro segments using IntroDB timestamps.") }
+                onBack = onGoBack
             )
 
             // AUTOPLAY NEXT EPISODE
@@ -353,8 +343,7 @@ fun PlaybackSettings(
                 subtitle = "Automatically play the next episode when one finishes",
                 isChecked = currentProfile.autoplayNextEpisode,
                 onCheckedChange = { viewModel.updateAutoplayNextEpisode(currentProfile.id, it) },
-                onBack = onGoBack,
-                onFocus = { viewModel.updateDescription("Automatically start the next episode after a countdown. Relies on IntroDB outro timestamps first, falls back to the configured threshold.") }
+                onBack = onGoBack
             )
 
             // AUTOPLAY THRESHOLD (only visible when autoplay is enabled)
@@ -366,8 +355,7 @@ fun PlaybackSettings(
                     options = listOf("Only IntroDB" to "introdb", "Percentage" to "percentage", "Time" to "time"),
                     selectedOption = currentProfile.autoplayThresholdMode,
                     onOptionSelected = { viewModel.updateAutoplayThresholdMode(currentProfile.id, it) },
-                    onBack = onGoBack,
-                    onFocus = { viewModel.updateDescription("Choose the autoplay trigger: Only IntroDB uses outro timestamps exclusively, Percentage and Time provide a fallback threshold when IntroDB data is unavailable.") }
+                    onBack = onGoBack
                 )
 
                 if (currentProfile.autoplayThresholdMode == "percentage") {
@@ -421,8 +409,7 @@ fun PlaybackSettings(
                 isSet = currentProfile.preferredAudioLanguage.isNotEmpty(),
                 onClick = { activeLanguageField = LanguageField.AUDIO_PRIMARY },
                 onBack = onGoBack,
-                focusRequester = audioPrimaryFR,
-                onFocus = { viewModel.updateDescription("Set your preferred primary audio language. When available, this language will be auto-selected.") }
+                focusRequester = audioPrimaryFR
             )
 
             SettingLanguageRow(
@@ -431,8 +418,7 @@ fun PlaybackSettings(
                 isSet = currentProfile.preferredAudioLanguageSecondary.isNotEmpty(),
                 onClick = { activeLanguageField = LanguageField.AUDIO_SECONDARY },
                 onBack = onGoBack,
-                focusRequester = audioSecondaryFR,
-                onFocus = { viewModel.updateDescription("Fallback audio language used when your primary language is not available.") }
+                focusRequester = audioSecondaryFR
             )
 
             SettingLanguageRow(
@@ -441,8 +427,7 @@ fun PlaybackSettings(
                 isSet = currentProfile.preferredSubtitleLanguage.isNotEmpty(),
                 onClick = { activeLanguageField = LanguageField.SUBTITLE_PRIMARY },
                 onBack = onGoBack,
-                focusRequester = subtitlePrimaryFR,
-                onFocus = { viewModel.updateDescription("Set your preferred subtitle language. Choose 'Off' to disable subtitles by default.") }
+                focusRequester = subtitlePrimaryFR
             )
 
             SettingLanguageRow(
@@ -451,8 +436,7 @@ fun PlaybackSettings(
                 isSet = currentProfile.preferredSubtitleLanguageSecondary.isNotEmpty(),
                 onClick = { activeLanguageField = LanguageField.SUBTITLE_SECONDARY },
                 onBack = onGoBack,
-                focusRequester = subtitleSecondaryFR,
-                onFocus = { viewModel.updateDescription("Fallback subtitle language used when your primary language is not available.") }
+                focusRequester = subtitleSecondaryFR
             )
         }
 
@@ -713,7 +697,7 @@ fun <T> SettingOptionRow(
 fun SettingRow(label: String, content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = label, // Changed from uppercase
+            text = label,
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.SemiBold, 
                 fontSize = 18.sp
@@ -1177,6 +1161,220 @@ private fun LanguagePickerContent(
                     }
                 }
             }
+        }
+    }
+}
+
+// --- ABOUT SETTINGS ---
+
+@Composable
+fun AboutSettings(
+    onGoBack: () -> Unit,
+    updateManager: AppUpdateManager = hiltViewModel<AboutViewModel>().updateManager
+) {
+    val updateState by updateManager.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.Start
+    ) {
+        // HEADER
+        Text(
+            "About",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+            color = Color.White
+        )
+        Text(
+            "App information and updates.",
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            color = Color.White.copy(0.6f),
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        // VERSION ROW
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(0.05f))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Version",
+                color = Color.White.copy(0.8f),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            )
+            Text(
+                BuildConfig.VERSION_NAME,
+                color = accentColor,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // UPDATE POPUP TOGGLE
+        var popupEnabled by remember { mutableStateOf(updateManager.isPopupEnabled) }
+        SettingToggleRow(
+            label = "Show update popup on launch",
+            isChecked = popupEnabled,
+            onCheckedChange = {
+                popupEnabled = it
+                updateManager.setPopupEnabled(it)
+            },
+            onBack = onGoBack,
+            blockUp = true
+        )
+
+        // CHECK FOR UPDATES BUTTON
+        val checkInteraction = remember { MutableInteractionSource() }
+        val isCheckFocused by checkInteraction.collectIsFocusedAsState()
+        val checkScale by animateFloatAsState(if (isCheckFocused) 1.02f else 1f)
+        val isChecking = updateState is UpdateState.Checking
+        val isDownloading = updateState is UpdateState.Downloading
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .onPreviewKeyEvent {
+                    if (it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown) {
+                        onGoBack(); true
+                    } else false
+                }
+                .scale(checkScale)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isCheckFocused) accentColor.copy(0.15f) else Color.White.copy(0.05f))
+                .border(
+                    if (isCheckFocused) 1.dp else 0.dp,
+                    if (isCheckFocused) accentColor else Color.Transparent,
+                    RoundedCornerShape(8.dp)
+                )
+                .clickable(interactionSource = checkInteraction, indication = null) {
+                    if (!isChecking && !isDownloading) {
+                        scope.launch { updateManager.checkForUpdate() }
+                    }
+                }
+                .focusable(interactionSource = checkInteraction)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = when (updateState) {
+                    is UpdateState.Checking -> "Checking..."
+                    is UpdateState.UpToDate -> "You're up to date"
+                    is UpdateState.Error -> (updateState as UpdateState.Error).message
+                    else -> "Check for Updates"
+                },
+                color = if (isCheckFocused) Color.White else Color.White.copy(0.8f),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            )
+        }
+
+        // UPDATE AVAILABLE SECTION
+        if (updateState is UpdateState.UpdateAvailable) {
+            val info = (updateState as UpdateState.UpdateAvailable).info
+
+            Spacer(Modifier.height(16.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                "Update Available: v${info.versionName}",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = accentColor
+            )
+
+            if (info.changelog.isNotBlank()) {
+                Text(
+                    info.changelog,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = Color.White.copy(0.6f),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // DOWNLOAD BUTTON
+            val dlInteraction = remember { MutableInteractionSource() }
+            val isDlFocused by dlInteraction.collectIsFocusedAsState()
+            val dlScale by animateFloatAsState(if (isDlFocused) 1.02f else 1f)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .scale(dlScale)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isDlFocused) accentColor.copy(0.3f) else accentColor.copy(0.15f))
+                    .border(
+                        if (isDlFocused) 1.dp else 0.dp,
+                        if (isDlFocused) accentColor else Color.Transparent,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable(interactionSource = dlInteraction, indication = null) {
+                        scope.launch { updateManager.downloadAndInstall(info.apkUrl) }
+                    }
+                    .focusable(interactionSource = dlInteraction)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "Download & Install",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                )
+            }
+        }
+
+        // DOWNLOAD PROGRESS
+        if (updateState is UpdateState.Downloading) {
+            val progress = (updateState as UpdateState.Downloading).progress
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Downloading... ${(progress * 100).toInt()}%",
+                color = accentColor,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(0.1f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(accentColor)
+                )
+            }
+        }
+
+        // READY TO INSTALL
+        if (updateState is UpdateState.ReadyToInstall) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Download complete. Installing...",
+                color = accentColor,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+            )
         }
     }
 }

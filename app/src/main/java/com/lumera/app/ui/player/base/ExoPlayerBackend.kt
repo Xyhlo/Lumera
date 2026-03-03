@@ -55,7 +55,6 @@ import androidx.media3.ui.PlayerView
 import java.util.Locale
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,11 +73,6 @@ private const val SUBTITLE_OFF_ID = "#none"
 private val BRACKET_CONTENT_REGEX = Regex("\\[[^\\]]*]")
 private val NON_LETTER_DIGIT_REGEX = Regex("[^\\p{L}\\p{N}]")
 private val WHITESPACE_REGEX = Regex("\\s+")
-private const val BUFFERING_STALL_THRESHOLD_MS = 12_000L
-private const val BUFFERING_RECOVERY_COOLDOWN_MS = 45_000L
-private const val BUFFERING_RECOVERY_SEEK_AHEAD_MS = 750L
-private const val BUFFERING_RECOVERY_MAX_HEADROOM_MS = 350L
-private const val BUFFERING_RECOVERY_STARTUP_GRACE_MS = 6_000L
 private const val AUDIO_SWITCH_RECOVERY_DELAY_MS = 1_500L
 private const val AUDIO_SWITCH_RECOVERY_SEEK_BACK_MS = 500L
 private const val IO_AUTO_RETRY_DELAY_MS = 450L
@@ -960,55 +954,6 @@ class ExoPlayerBackend(
                 currentSourceId = currentSourceId ?: it.currentSourceId
             )
         }
-        // this causes cascading seek, rebuffer, seek cycles that crash the player
-        // maybeRecoverFromBufferingStall(player, position)
-    }
-
-    private fun maybeRecoverFromBufferingStall(player: ExoPlayer, positionMs: Long) {
-        val now = SystemClock.elapsedRealtime()
-        val canRecover = player.playWhenReady &&
-            player.playbackState == Player.STATE_BUFFERING &&
-            player.currentMediaItem != null &&
-            player.playerError == null &&
-            player.isCurrentMediaItemSeekable
-
-        if (!canRecover) {
-            bufferingAnchorPositionMs = positionMs
-            bufferingAnchorElapsedMs = now
-            return
-        }
-
-        if (sourcePreparedElapsedMs > 0L && now - sourcePreparedElapsedMs < BUFFERING_RECOVERY_STARTUP_GRACE_MS) {
-            bufferingAnchorPositionMs = positionMs
-            bufferingAnchorElapsedMs = now
-            return
-        }
-
-        val bufferHeadroomMs = (player.bufferedPosition - positionMs).coerceAtLeast(0L)
-        if (bufferHeadroomMs > BUFFERING_RECOVERY_MAX_HEADROOM_MS) {
-            bufferingAnchorPositionMs = positionMs
-            bufferingAnchorElapsedMs = now
-            return
-        }
-
-        if (bufferingAnchorPositionMs != positionMs) {
-            bufferingAnchorPositionMs = positionMs
-            bufferingAnchorElapsedMs = now
-            return
-        }
-
-        if (now - bufferingAnchorElapsedMs < BUFFERING_STALL_THRESHOLD_MS) return
-        if (now - lastBufferingRecoveryAttemptMs < BUFFERING_RECOVERY_COOLDOWN_MS) return
-
-        val duration = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-        val target = (positionMs + BUFFERING_RECOVERY_SEEK_AHEAD_MS).coerceAtMost(duration)
-        if (target == positionMs) return
-
-        lastBufferingRecoveryAttemptMs = now
-        bufferingAnchorPositionMs = target
-        bufferingAnchorElapsedMs = now
-        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-        player.seekTo(target)
     }
 
     private fun attemptAutoRetryFromIoError(error: PlaybackException): Boolean {
@@ -1380,12 +1325,10 @@ class ExoPlayerBackend(
         tracks: List<PlayerTrackOption>,
         preferredLanguage: String
     ): PlayerTrackOption? {
-        val prefIso = Locale.forLanguageTag(preferredLanguage).language
-            .takeIf { it.isNotBlank() } ?: preferredLanguage.lowercase(Locale.ROOT)
+        val prefKey = normalizeLanguageToIso2(preferredLanguage)
+        if (prefKey == "und") return null
         return tracks.firstOrNull { track ->
-            val trackIso = track.language?.let { Locale.forLanguageTag(it).language }
-                ?.takeIf { it.isNotBlank() } ?: track.language?.lowercase(Locale.ROOT)
-            trackIso == prefIso
+            normalizeLanguageToIso2(track.language) == prefKey
         }
     }
 
@@ -1393,21 +1336,17 @@ class ExoPlayerBackend(
         tracks: List<PlayerTrackOption>,
         preferredLanguage: String
     ): PlayerTrackOption? {
-        val prefIso = Locale.forLanguageTag(preferredLanguage).language
-            .takeIf { it.isNotBlank() } ?: preferredLanguage.lowercase(Locale.ROOT)
+        val prefKey = normalizeLanguageToIso2(preferredLanguage)
+        if (prefKey == "und") return null
         // Prefer non-forced, non-SDH tracks
         val normalMatch = tracks.firstOrNull { track ->
-            val trackIso = track.language?.let { Locale.forLanguageTag(it).language }
-                ?.takeIf { it.isNotBlank() } ?: track.language?.lowercase(Locale.ROOT)
-            trackIso == prefIso &&
+            normalizeLanguageToIso2(track.language) == prefKey &&
                 (track.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) == 0 &&
                 (track.selectionFlags and C.SELECTION_FLAG_FORCED) == 0
         }
         if (normalMatch != null) return normalMatch
         return tracks.firstOrNull { track ->
-            val trackIso = track.language?.let { Locale.forLanguageTag(it).language }
-                ?.takeIf { it.isNotBlank() } ?: track.language?.lowercase(Locale.ROOT)
-            trackIso == prefIso
+            normalizeLanguageToIso2(track.language) == prefKey
         }
     }
 
@@ -1655,7 +1594,6 @@ class ExoPlayerBackend(
 
         return formatTagFromText(normalizedRaw)
             ?: formatTagFromText(joined)
-            ?: null
     }
 
     private fun formatTagFromMime(mimeType: String?): String? {

@@ -57,7 +57,6 @@ class StremioAuthManager @Inject constructor(
     val connectionState: StateFlow<StremioConnectionState> = _connectionState.asStateFlow()
 
     init {
-        // Initialize state from stored credentials
         refreshConnectionState()
     }
 
@@ -158,13 +157,11 @@ class StremioAuthManager @Inject constructor(
         try {
             val authKey = stremioAuthService.login(email, password)
             
-            // Store credentials securely
             encryptedPrefs.edit()
                 .putString(KEY_AUTH_KEY, authKey)
                 .putString(KEY_EMAIL, email)
                 .apply()
 
-            // Update state
             _connectionState.value = StremioConnectionState.Connected(email)
 
             Result.success(authKey)

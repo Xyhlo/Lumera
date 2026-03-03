@@ -81,14 +81,12 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 1. Rename is Global (The list name changes everywhere)
     fun renameCatalog(config: CatalogConfigEntity, newName: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.saveCatalogConfig(config.copy(customTitle = newName))
         }
     }
 
-    // 2. ADD TO TAB (Enable Visibility & Set Order to Bottom)
     fun addItemToTab(item: EditorListItem, screen: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val currentItems = getEditorItems(screen)
@@ -120,7 +118,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 3. REMOVE FROM TAB (Disable Visibility)
     fun removeItemFromTab(item: EditorListItem, screen: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             when(item) {
@@ -148,7 +145,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 4. UNIFIED MOVE (Normalize on Save)
     fun moveEditorItem(item: EditorListItem, direction: Int, screen: String) {
         val currentList = getEditorItems(screen).toMutableList()
         val index = currentList.indexOfFirst { it.key == item.key }
@@ -192,7 +188,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 5. UPDATE LAYOUT SETTINGS (Grid View)
     fun updateLayoutSettings(
         config: CatalogConfigEntity,
         isInfiniteLoopEnabled: Boolean,
@@ -210,7 +205,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 6. CREATE HUB ROW
     fun createHubRow(name: String, shape: HubShape, items: List<HubRowItemEntity>, tab: String = "home") {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val maxOrder = when (tab) {
@@ -246,14 +240,12 @@ class DashboardViewModel @Inject constructor(
 
 
 
-    // 8. DELETE HUB ROW
     fun deleteHubRow(hubRowId: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.deleteHubRowWithItems(hubRowId)
         }
     }
 
-    // 9. RENAME HUB ROW
     fun renameHubRow(hubRowId: String, newTitle: String) {
         val currentHub = _hubRows.value.find { it.hub.id == hubRowId }?.hub ?: return
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
@@ -261,7 +253,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 10. CHANGE HUB ROW SHAPE
     fun changeHubRowShape(hubRowId: String, shape: HubShape) {
         val currentHub = _hubRows.value.find { it.hub.id == hubRowId }?.hub ?: return
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
@@ -269,7 +260,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 11. ADD CATEGORY TO HUB ROW
     fun addCategoryToHubRow(hubRowId: String, config: CatalogConfigEntity) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val maxOrder = dao.getMaxHubItemOrder(hubRowId) ?: -1
@@ -283,21 +273,18 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 12. REMOVE CATEGORY FROM HUB ROW
     fun removeCategoryFromHubRow(hubRowId: String, configUniqueId: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.deleteHubRowItem(hubRowId, configUniqueId)
         }
     }
 
-    // 13. UPDATE HUB ITEM IMAGE
     fun updateHubItemImage(hubRowId: String, configUniqueId: String, imageUrl: String?) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.updateHubItemImage(hubRowId, configUniqueId, imageUrl)
         }
     }
 
-    // 14. RENAME HUB ITEM
     fun renameHubRowItem(hubRowId: String, configUniqueId: String, newTitle: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val currentItems = _hubRows.value.find { it.hub.id == hubRowId }?.items ?: return@launch
@@ -306,27 +293,6 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // 15. MOVE HUB ITEM
-    fun moveHubRowItem(hubRowId: String, configUniqueId: String, direction: Int) {
-        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            val currentItems = _hubRows.value.find { it.hub.id == hubRowId }?.items?.sortedBy { it.itemOrder }?.toMutableList() ?: return@launch
-            val index = currentItems.indexOfFirst { it.configUniqueId == configUniqueId }
-            if (index == -1) return@launch
-
-            val newIndex = index + direction
-            if (newIndex in 0 until currentItems.size) {
-                Collections.swap(currentItems, index, newIndex)
-                
-                // Re-normalize orders
-                val updatedItems = currentItems.mapIndexed { i, item ->
-                    item.copy(itemOrder = i)
-                }
-                dao.updateHubRowItems(updatedItems)
-            }
-        }
-    }
-
-    // 16. BULK UPDATE HUB ITEMS ORDER
     fun updateHubRowItemsOrder(hubRowId: String, orderedItems: List<HubRowItemEntity>) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val updatedItems = orderedItems.mapIndexed { index, item ->
@@ -349,8 +315,6 @@ class DashboardViewModel @Inject constructor(
             dao.insertProfile(profile.withHero(tab, config))
         }
     }
-
-    // --- HELPERS ---
 
     fun getEditorItems(selectedTab: String): List<EditorListItem> {
         val categoryItems = _configs.value

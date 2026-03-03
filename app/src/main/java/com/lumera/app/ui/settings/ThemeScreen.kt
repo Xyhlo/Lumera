@@ -106,7 +106,6 @@ fun ThemeScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Block Up navigation when top nav is active
-        // Block Up navigation when top nav is active
         val upBlockModifier = Modifier.onPreviewKeyEvent {
             if (it.key == Key.DirectionUp && it.type == KeyEventType.KeyDown) {
                 true // Consume the event to block focus escape

@@ -55,7 +55,7 @@ fun GlassSidebarScaffold(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     panelWidth: Dp = 500.dp,
-    panelPadding: PaddingValues = PaddingValues(24.dp),
+    panelPadding: PaddingValues = PaddingValues(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 0.dp),
     overlayAlpha: Float = 0.4f,
     enter: EnterTransition = slideInHorizontally { it },
     exit: ExitTransition = slideOutHorizontally { it },
@@ -216,7 +216,6 @@ fun EpisodesContent(
         LazyColumn(
             state = listState, // Using the hoisted state
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 32.dp),
             modifier = Modifier.dpadNavigation(onDismiss)
         ) {
             if (episodes.isEmpty()) item { Text("No episodes found.", color = Color.Gray) }
@@ -310,7 +309,6 @@ fun SourcesContent(
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 32.dp),
                 modifier = Modifier.dpadNavigation(onBack)
             ) {
                 if (filtered.isEmpty()) item {

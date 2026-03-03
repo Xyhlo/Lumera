@@ -67,7 +67,6 @@ fun DashboardEditorScreen(
     var reorderingConfig by remember { mutableStateOf<CatalogConfigEntity?>(null) }
     var reorderingHub by remember { mutableStateOf<HubRowEntity?>(null) }
 
-    var lastFocusedItemKey by remember { mutableStateOf<String?>(null) }
     var pendingFocusKey by remember { mutableStateOf<String?>(null) }
     var focusTabAfterRemoval by remember { mutableStateOf(false) }
 
@@ -420,7 +419,6 @@ fun DashboardEditorScreen(
                                             reorderingHub = null
                                             showSnackbar("Reorder complete")
                                         } else {
-                                            lastFocusedItemKey = item.key
                                             dialogState = DialogState.ManageHub(item)
                                         }
                                     },
@@ -471,7 +469,6 @@ fun DashboardEditorScreen(
                                             reorderingConfig = null
                                             showSnackbar("Reorder complete")
                                         } else {
-                                            lastFocusedItemKey = item.key
                                             dialogState = DialogState.ManageCategory(config)
                                         }
                                     },
@@ -831,7 +828,6 @@ fun DashboardEditorScreen(
                 )
             }
             var showAddCategoryToHub by remember { mutableStateOf(false) }
-            var uploadingHubItem by remember { mutableStateOf<HubRowItemEntity?>(null) }
             var selectedManageItem by remember { mutableStateOf<HubRowItemEntity?>(null) }
             var reorderingHubItem by remember { mutableStateOf<HubRowItemEntity?>(null) }
 

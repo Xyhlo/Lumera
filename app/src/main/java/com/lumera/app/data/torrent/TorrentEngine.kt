@@ -2,9 +2,11 @@ package com.lumera.app.data.torrent
 
 import android.content.Context
 import android.util.Log
-import com.frostwire.jlibtorrent.SessionManager
-import com.frostwire.jlibtorrent.SessionParams
-import com.frostwire.jlibtorrent.SettingsPack
+import org.libtorrent4j.AlertListener
+import org.libtorrent4j.SessionManager
+import org.libtorrent4j.SessionParams
+import org.libtorrent4j.SettingsPack
+import org.libtorrent4j.alerts.Alert
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,16 +20,44 @@ class TorrentEngine @Inject constructor() {
     fun start(context: Context) {
         if (isStarted) return
 
-        // --- FIX: Create explicit settings instead of passing null ---
-        val settings = SettingsPack()
-        // We can tune settings here later (e.g. limit download speed)
+        // Listen for ALL alerts to diagnose listen failures
+        session.addListener(object : AlertListener {
+            override fun types(): IntArray? = null // null = all alert types
+            override fun alert(alert: Alert<*>) {
+                val type = alert.type().toString()
+                val msg = alert.message()
+                // Log listen-related and error alerts
+                if (type.contains("LISTEN", ignoreCase = true) ||
+                    type.contains("ERROR", ignoreCase = true) ||
+                    type.contains("DHT", ignoreCase = true) ||
+                    type.contains("PORTMAP", ignoreCase = true) ||
+                    msg.contains("listen", ignoreCase = true) ||
+                    msg.contains("error", ignoreCase = true) ||
+                    msg.contains("bind", ignoreCase = true)) {
+                    Log.w("LumeraTorrent", "ALERT [$type]: $msg")
+                } else {
+                    Log.v("LumeraTorrent", "alert [$type]: $msg")
+                }
+            }
+        })
 
+        val settings = SettingsPack().apply {
+            setEnableDht(true)
+            setDhtBootstrapNodes(
+                "router.bittorrent.com:6881," +
+                "router.utorrent.com:6881," +
+                "dht.transmissionbt.com:6881," +
+                "dht.aelitis.com:6881"
+            )
+            connectionsLimit(200)
+            activeDownloads(1)
+            activeSeeds(1)
+        }
         val params = SessionParams(settings)
         session.start(params)
-        // -------------------------------------------------------------
 
-        // 2. Setup Save Directory
-        // We use the app's internal cache so we don't need Storage Permissions
+        Log.d("LumeraTorrent", "Endpoints after start: ${session.listenEndpoints()}")
+
         val savePath = File(context.getExternalFilesDir(null), "downloads")
         if (!savePath.exists()) savePath.mkdirs()
 

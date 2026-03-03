@@ -57,6 +57,11 @@ class ThemeManager @Inject constructor(
     /**
      * Set the current profile to resolve its theme
      */
+    fun resetTheme() {
+        _currentProfileId.value = null
+        _currentTheme.value = DefaultThemes.VOID
+    }
+
     fun setCurrentProfile(profileId: Int, themeId: String) {
         _currentProfileId.value = profileId
         viewModelScope.launch {

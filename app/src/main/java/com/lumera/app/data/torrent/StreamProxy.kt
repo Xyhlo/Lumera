@@ -1,12 +1,14 @@
 package com.lumera.app.data.torrent
 
+import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
 
 class StreamProxy(
-    private val file: File
+    private val file: File,
+    private val totalFileSize: Long = -1L
 ) : NanoHTTPD("127.0.0.1", 0) {
 
     override fun serve(session: IHTTPSession): Response {
@@ -14,7 +16,7 @@ class StreamProxy(
             return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "File not found")
         }
 
-        val fileLength = file.length()
+        val fileLength = if (totalFileSize > 0) totalFileSize else file.length()
         val mimeType = inferMimeType(file.name)
         val rangeHeader = session.headers["range"]
 
@@ -25,8 +27,25 @@ class StreamProxy(
                 serveFullContent(fileLength, mimeType)
             }
         } catch (e: Exception) {
+            Log.e("LumeraTorrent", "StreamProxy serve error: ${e.message}")
             newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Stream error")
         }
+    }
+
+    /**
+     * Wait until the file has grown to at least [needed] bytes.
+     * This is essential for torrent streaming — the player may request data
+     * (e.g. MP4 moov atom at the end) before the torrent has downloaded it.
+     * NanoHTTPD uses one thread per connection, so blocking here is safe.
+     * Returns true if data became available, false on timeout.
+     */
+    private fun waitForData(needed: Long, timeoutMs: Long = 90_000): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (file.length() < needed) {
+            if (System.currentTimeMillis() >= deadline) return false
+            try { Thread.sleep(500) } catch (_: InterruptedException) { return false }
+        }
+        return true
     }
 
     private fun serveFullContent(fileLength: Long, mimeType: String): Response {
@@ -84,6 +103,18 @@ class StreamProxy(
                 Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "Range not satisfiable"
             ).apply {
                 addHeader("Content-Range", "bytes */$fileLength")
+            }
+        }
+
+        // Wait for the torrent to download the requested region
+        val needed = end + 1
+        if (file.length() < needed) {
+            Log.d("LumeraTorrent", "Proxy waiting for data: need $needed bytes, have ${file.length()}")
+            if (!waitForData(needed)) {
+                Log.w("LumeraTorrent", "Proxy timeout waiting for bytes $start-$end")
+                return newFixedLengthResponse(
+                    Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Data not yet available"
+                )
             }
         }
 

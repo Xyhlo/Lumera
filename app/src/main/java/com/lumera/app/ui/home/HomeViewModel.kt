@@ -39,7 +39,7 @@ class HomeViewModel @Inject constructor(
 
     data class HomeState(
         val mixedRows: List<HomeRowItem> = emptyList(),
-        val rows: List<HomeRow> = emptyList(), // Kept for legacy/debug if needed, but mixedRows is primary
+        val rows: List<HomeRow> = emptyList(),
         val hubRows: List<HubGroupRow> = emptyList(),
         val history: List<WatchHistoryEntity> = emptyList(),
         val isLoading: Boolean = true,
@@ -47,7 +47,6 @@ class HomeViewModel @Inject constructor(
         val loadedScreen: String? = null,
         // Row scroll positions: rowKey -> Pair(firstVisibleItemIndex, firstVisibleItemScrollOffset)
         val rowScrollPositions: Map<String, Pair<Int, Int>> = emptyMap(),
-        // Vertical list scroll position: Pair(firstVisibleItemIndex, firstVisibleItemScrollOffset)
         // Vertical list scroll position: Pair(firstVisibleItemIndex, firstVisibleItemScrollOffset)
         val verticalScrollPosition: Pair<Int, Int> = Pair(0, 0),
         val heroRow: HomeRow? = null,
@@ -532,7 +531,6 @@ class HomeViewModel @Inject constructor(
 
         // 3. If not found, fetch from repository
         viewModelScope.launch {
-            // Optional: Set a transient loading state if you want a spinner
             try {
                 val fetchedRow = repository.getCategoryRowPreview(
                     configId = hubItem.categoryId,
@@ -544,8 +542,6 @@ class HomeViewModel @Inject constructor(
                         .filterNot { it.configId == fetchedRow.configId } + fetchedRow
                     _state.value = _state.value.copy(rows = updatedRows)
                     onResult(fetchedRow.title, fetchedRow.items)
-                } else {
-                    // TODO: Show error toast (requires UI event stream)
                 }
             } catch (_: Exception) {
                 // Ignore error

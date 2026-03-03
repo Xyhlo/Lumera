@@ -6,8 +6,6 @@ import com.lumera.app.data.local.AddonDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -15,13 +13,6 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val dao: AddonDao
 ) : ViewModel() {
-
-    private val _focusedDescription = MutableStateFlow("Select a setting to view details.")
-    val focusedDescription = _focusedDescription.asStateFlow()
-
-    fun updateDescription(text: String) {
-        _focusedDescription.value = text
-    }
 
     fun updateNavPosition(profileId: Int, position: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {

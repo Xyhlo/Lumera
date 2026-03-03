@@ -8,10 +8,8 @@ data class ProfileEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
 
-    // Theme reference - links to ThemeEntity.id
     val themeId: String = "void",
 
-    // CHANGED: String reference (e.g., "avatar_1")
     val avatarRef: String = "avatar_1",
 
     val roundCorners: Boolean = true,
@@ -35,7 +33,6 @@ data class ProfileEntity(
     val seriesHeroPosterCount: Int = 10,
     val seriesHeroAutoScrollSeconds: Int = 0,
 
-    // Playback settings
     val tunnelingEnabled: Boolean = false,
     val mapDV7ToHevc: Boolean = false,
     val decoderPriority: Int = 1,       // 0=device only, 1=prefer device, 2=prefer app
@@ -49,7 +46,6 @@ data class ProfileEntity(
     val rememberSourceSelection: Boolean = true,
     val skipIntro: Boolean = true,
 
-    // Language preferences
     val preferredAudioLanguage: String = "",
     val preferredAudioLanguageSecondary: String = "",
     val preferredSubtitleLanguage: String = "",

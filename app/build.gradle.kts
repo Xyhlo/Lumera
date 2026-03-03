@@ -18,7 +18,11 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0-alpha"
+        versionName = "0.1.0-beta"
+
+        // GitHub repository for auto-update system
+        buildConfigField("String", "GITHUB_OWNER", "\"LumeraD3v\"")
+        buildConfigField("String", "GITHUB_REPO", "\"Lumera\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -44,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -109,11 +114,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // --- TORRENT ENGINE ---
-    implementation("com.frostwire:jlibtorrent:1.2.0.18")
-    implementation("com.frostwire:jlibtorrent-android-arm:1.2.0.18")
-    implementation("com.frostwire:jlibtorrent-android-arm64:1.2.0.18")
-    implementation("com.frostwire:jlibtorrent-android-x86:1.2.0.18")
-    implementation("com.frostwire:jlibtorrent-android-x86_64:1.2.0.18")
+    implementation("org.libtorrent4j:libtorrent4j:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-x86:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-39")
 
     // --- LOCAL WEB SERVER ---
     implementation("org.nanohttpd:nanohttpd:2.3.1")

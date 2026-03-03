@@ -11,7 +11,6 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Request/Response DTOs for Stremio API
 data class StremioLoginRequest(
     val type: String = "Login",
     val email: String,

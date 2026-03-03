@@ -85,7 +85,6 @@ fun HubBulkUploadDialog(
         }
     }
 
-    // Creating focus
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)
         focusRequester.requestFocus()

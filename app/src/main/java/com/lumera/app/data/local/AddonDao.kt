@@ -20,7 +20,6 @@ import androidx.room.Delete
 @Dao
 interface AddonDao {
 
-    // --- ADDONS ---
     @Query("SELECT * FROM addons ORDER BY sortOrder ASC")
     fun getAllAddons(): Flow<List<AddonEntity>>
 
@@ -39,7 +38,6 @@ interface AddonDao {
     @Query("SELECT * FROM addons WHERE transportUrl = :transportUrl")
     suspend fun getAddon(transportUrl: String): AddonEntity?
 
-    // --- CATALOG CONFIGS ---
     @Query("SELECT * FROM catalog_configs")
     fun getAllCatalogConfigs(): Flow<List<CatalogConfigEntity>>
 
@@ -58,11 +56,9 @@ interface AddonDao {
     @Query("SELECT * FROM catalog_configs WHERE uniqueId = :uniqueId")
     suspend fun getCatalogConfig(uniqueId: String): CatalogConfigEntity?
 
-    // --- PROFILES ---
     @Query("SELECT * FROM profiles")
     fun getProfiles(): Flow<List<ProfileEntity>>
 
-    // ADDED: This is required by SettingsViewModel to get the profile before updating
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun getProfileById(id: Int): ProfileEntity?
 
@@ -78,7 +74,6 @@ interface AddonDao {
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun deleteProfile(id: Int)
 
-    // --- WATCH HISTORY ---
     @Query("SELECT * FROM watch_history ORDER BY lastWatched DESC")
     fun getWatchHistory(): Flow<List<WatchHistoryEntity>>
 
@@ -110,7 +105,6 @@ interface AddonDao {
     @Query("DELETE FROM watch_history WHERE type = 'series' AND id LIKE :episodePrefix")
     suspend fun deleteSeriesHistory(episodePrefix: String)
 
-    // --- THEMES ---
     @Query("SELECT * FROM themes")
     fun getAllThemes(): Flow<List<ThemeEntity>>
 
@@ -120,13 +114,9 @@ interface AddonDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTheme(theme: ThemeEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertThemes(themes: List<ThemeEntity>)
-
     @Delete
     suspend fun deleteTheme(theme: ThemeEntity)
 
-    // --- HUB ROWS ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHubRow(row: HubRowEntity)
 
@@ -144,9 +134,6 @@ interface AddonDao {
 
     @Query("SELECT * FROM hub_rows ORDER BY homeOrder ASC, createdAt ASC")
     fun getAllHubRows(): Flow<List<HubRowEntity>>
-
-    @Query("SELECT * FROM hub_row_items WHERE hubRowId = :hubRowId ORDER BY itemOrder ASC")
-    fun getHubRowItems(hubRowId: String): Flow<List<HubRowItemEntity>>
 
     @Query("SELECT * FROM hub_row_items ORDER BY itemOrder ASC")
     fun getAllHubRowItems(): Flow<List<HubRowItemEntity>>

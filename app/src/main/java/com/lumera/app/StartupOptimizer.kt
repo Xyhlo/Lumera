@@ -13,22 +13,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * ============================================================================
- * STARTUP OPTIMIZER - Pre-warm critical components for smooth first experience
- * ============================================================================
- * 
- * Problem: First few seconds after app launch or re-entry are laggy because:
- * 1. Coil's image decoder pool needs to spin up threads
- * 2. Compose compiler needs to JIT compile rendering paths
- * 3. Image memory cache is empty - first images need decoding
- * 4. LazyList prefetch hasn't started yet
- * 
- * Solution: Warmup during splash/profile selection
- * 1. Prime Coil's decoder pool with a dummy decode
- * 2. Pre-allocate memory cache space
- * 3. Prefetch first-screen images before navigation
- * 
- * ============================================================================
+ * Pre-warms Coil's image decoder pool and memory cache during splash/profile selection
+ * to eliminate first-scroll lag.
  */
 @Singleton
 class StartupOptimizer @Inject constructor(
@@ -40,7 +26,7 @@ class StartupOptimizer @Inject constructor(
         private const val TAG = "StartupOptimizer"
         private const val POSTER_WIDTH = 280
         private const val POSTER_HEIGHT = 420
-        private const val WARMUP_DECODE_COUNT = 3 // Number of concurrent decoder warmups
+        private const val WARMUP_DECODE_COUNT = 3
     }
     
     private var isWarmedUp = false
@@ -82,7 +68,7 @@ class StartupOptimizer @Inject constructor(
                 // Use actual poster size (280x420) to warm the decoder for real workloads
                 val bitmap = Bitmap.createBitmap(POSTER_WIDTH, POSTER_HEIGHT, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(bitmap)
-                canvas.drawColor(0xFF121212.toInt()) // Dark background
+                canvas.drawColor(0xFF121212.toInt())
                 bitmap.recycle()
             } catch (e: Exception) {
                 // Ignore - this is just a warmup

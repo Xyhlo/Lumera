@@ -15,17 +15,14 @@ data class CatalogConfigEntity(
 
     val customTitle: String? = null,
 
-    // --- INDEPENDENT VISIBILITY ---
     val showInHome: Boolean = false,
     val showInMovies: Boolean = false,
     val showInSeries: Boolean = false,
 
-    // --- INDEPENDENT ORDERING ---
     val homeOrder: Int = 999,
     val moviesOrder: Int = 999,
     val seriesOrder: Int = 999,
 
-    // --- LAYOUT SETTINGS (Grid View) ---
     val isInfiniteLoopEnabled: Boolean = false,  // Default: Standard linear scrolling (Grid View)
     val visibleItemCount: Int = 15,              // Only used when Grid View is enabled
     val isInfiniteScrollingEnabled: Boolean = true  // Only used when Grid View is enabled; loops at View More

@@ -53,22 +53,16 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.lumera.app.data.auth.StremioConnectionState
 import com.lumera.app.remote_input.ServerInfo
-import com.lumera.app.remote_input.NetworkUtils
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 fun IntegrationsScreen(
     onBack: () -> Unit,
-    isTopNav: Boolean = false,
     viewModel: IntegrationsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
     // Dialog state
     var showConnectDialog by remember { mutableStateOf(false) }
     var showManagementDialog by remember { mutableStateOf(false) }
@@ -102,7 +96,6 @@ fun IntegrationsScreen(
         } else false
     }
     
-    // Block Up navigation when top nav is active
     // Block Up navigation when top nav is active
     val upBlockModifier = Modifier.onPreviewKeyEvent {
         if (it.key == Key.DirectionUp && it.type == KeyEventType.KeyDown) {

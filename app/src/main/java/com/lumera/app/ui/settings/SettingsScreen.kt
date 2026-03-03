@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -37,10 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lumera.app.R
 import com.lumera.app.data.model.ProfileEntity
-import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.ui.addons.AddonsScreen
 import com.lumera.app.ui.theme.ThemeManager
-import com.lumera.app.ui.theme.VoidBlack
 import com.lumera.app.ui.utils.rememberLastFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -53,7 +50,8 @@ enum class SettingsSection(val label: String, @DrawableRes val iconRes: Int) {
     Dashboard("Home Screen", R.drawable.home_icon),
     Playback("Playback", R.drawable.playback_icon),
     Addons("Addons", R.drawable.puzzle_icon),
-    Integrations("Integrations", R.drawable.integrations_icon)
+    Integrations("Integrations", R.drawable.integrations_icon),
+    About("About", R.drawable.info_icon)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -73,7 +71,7 @@ fun SettingsScreen(
 
     val sidebarListRequester = remember { FocusRequester() }
     val contentPaneRequester = remember { FocusRequester() }
-    val itemRequesters = remember { SettingsSection.values().associateWith { FocusRequester() } }
+    val itemRequesters = remember { SettingsSection.entries.associateWith { FocusRequester() } }
 
     val scope = rememberCoroutineScope()
 
@@ -160,7 +158,7 @@ fun SettingsScreen(
                     .focusRequester(sidebarListRequester)
                     .padding(top = 0.dp, bottom = 10.dp)
             ) {
-                SettingsSection.values().forEach { section ->
+                SettingsSection.entries.forEach { section ->
                     key(section) {
                         val isSelected = selectedSection == section
 
@@ -177,7 +175,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        val isFirstSection = section == SettingsSection.values().first()
+                        val isFirstSection = section == SettingsSection.entries.first()
 
                         val focusModifier = Modifier
                             .focusRequester(itemRequesters[section]!!)
@@ -253,8 +251,7 @@ fun SettingsScreen(
                             PersonalizationSettings(
                                 currentProfile = currentProfile,
                                 viewModel = viewModel,
-                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() },
-                                isTopNav = isTopNav
+                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() }
                             )
                         }
                         SettingsSection.Theme -> {
@@ -278,8 +275,7 @@ fun SettingsScreen(
                             PlaybackSettings(
                                 currentProfile = currentProfile,
                                 viewModel = viewModel,
-                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() },
-                                isTopNav = isTopNav
+                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() }
                             )
                         }
                         SettingsSection.Addons -> {
@@ -290,8 +286,12 @@ fun SettingsScreen(
                         }
                         SettingsSection.Integrations -> {
                             IntegrationsScreen(
-                                onBack = { itemRequesters[selectedSection]?.requestFocus() },
-                                isTopNav = isTopNav
+                                onBack = { itemRequesters[selectedSection]?.requestFocus() }
+                            )
+                        }
+                        SettingsSection.About -> {
+                            AboutSettings(
+                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() }
                             )
                         }
                     }
@@ -318,8 +318,6 @@ fun SettingsSidebarItem(
         if (isFocused) onFocus()
     }
 
-    val accentColor = MaterialTheme.colorScheme.primary
-    
     // Visual logic (like VoidTabBtn):
     // - If focused: full highlight (white text)
     // - If selected but not focused: partial highlight (white text)

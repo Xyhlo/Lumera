@@ -16,7 +16,6 @@ data class AddonEntity(
     val isEnabled: Boolean = true,
     val nickname: String? = null,
 
-    // Store supported catalogs as JSON string
     val catalogsJson: String = "[]",
 
     val sortOrder: Int = 999

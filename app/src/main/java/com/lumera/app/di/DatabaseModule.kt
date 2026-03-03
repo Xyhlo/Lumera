@@ -39,7 +39,6 @@ object DatabaseModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    // Ensure WAL writes are immediately durable (survive force-close)
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })

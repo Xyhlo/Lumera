@@ -12,8 +12,10 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lumera.app.data.update.AppUpdateManager
+import com.lumera.app.data.update.UpdateInfo
+import com.lumera.app.data.update.UpdateState
 import com.lumera.app.data.player.PlaybackTrackSelectionStore
 import com.lumera.app.data.torrent.TorrentService
 import com.lumera.app.data.player.SourceSelectionStore
@@ -70,6 +75,7 @@ import com.lumera.app.ui.profiles.ProfileViewModel
 import com.lumera.app.ui.search.SearchScreen
 import com.lumera.app.ui.settings.SettingsScreen
 import com.lumera.app.ui.addons.VoidButton
+import com.lumera.app.ui.addons.VoidDialog
 import com.lumera.app.ui.theme.DefaultThemes
 import com.lumera.app.ui.theme.LocalRoundCorners
 import com.lumera.app.ui.theme.LocalHubRoundCorners
@@ -81,7 +87,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import android.media.MediaPlayer
 import com.lumera.app.data.profile.ProfileConfigurationManager
+
 import java.util.Locale
 import javax.inject.Inject
 
@@ -158,12 +166,28 @@ private fun normalizeSubtitleLanguageTag(rawLang: String?): String? {
     return value.replace('_', '-').lowercase(Locale.ROOT)
 }
 
+private val TORRENT_TRACKERS = listOf(
+    // HTTP trackers (TCP — work even when UDP is blocked)
+    "http://tracker.opentrackr.org:1337/announce",
+    "http://tracker.openbittorrent.com:80/announce",
+    "http://tracker1.bt.moack.co.kr:80/announce",
+    "http://tracker.gbitt.info:80/announce",
+    // UDP trackers (fallback)
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.openbittorrent.com:6969/announce",
+    "udp://exodus.desync.com:6969/announce"
+)
+
 private fun resolvePlayableSourceUrl(stream: Stream): String? {
     val directUrl = stream.url?.trim()?.takeIf { it.isNotEmpty() }
     if (directUrl != null) return directUrl
 
     val infoHash = stream.infoHash?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return "magnet:?xt=urn:btih:${infoHash}&dn=Video&tr=udp://tracker.opentrackr.org:1337/announce"
+    val trackerParams = TORRENT_TRACKERS.joinToString("") {
+        "&tr=${java.net.URLEncoder.encode(it, "UTF-8")}"
+    }
+    return "magnet:?xt=urn:btih:${infoHash}&dn=Video${trackerParams}"
 }
 
 private fun sourceDisplayLabel(stream: Stream): String {
@@ -235,6 +259,83 @@ private fun PlayerChoiceDialog(
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateAvailableDialog(
+    info: UpdateInfo,
+    onUpdate: () -> Unit,
+    onDismiss: () -> Unit,
+    onDontShowAgain: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .width(480.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.background)
+                .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                .padding(24.dp)
+        ) {
+            androidx.compose.foundation.layout.Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Update Available",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "v${info.versionName}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (info.changelog.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        info.changelog,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(0.7f),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    VoidButton(
+                        text = "Later",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
+                    VoidButton(
+                        text = "Update",
+                        onClick = onUpdate,
+                        isPrimary = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Don't show again",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(0.4f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { onDontShowAgain() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
     }
@@ -455,6 +556,15 @@ class MainActivity : ComponentActivity() {
     lateinit var introRepository: IntroRepository
     @Inject
     lateinit var profileConfigurationManager: ProfileConfigurationManager
+    @Inject
+    lateinit var appUpdateManager: AppUpdateManager
+
+    private var splashPlayer: MediaPlayer? = null
+    private var splashOverlay: android.view.View? = null
+    private var splashIndicator: android.view.View? = null
+    private var splashPausedAtLogo = false
+    private var splashAppReady = false
+    private val _splashFinished = mutableStateOf(false)
 
     override fun onStop() {
         super.onStop()
@@ -463,9 +573,131 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        dismissSplash()
+        super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (splashOverlay == null) {
+            outState.putBoolean(KEY_SPLASH_SHOWN, true)
+        }
+    }
+
+    private fun onSplashAppReady() {
+        if (splashAppReady) return
+        splashAppReady = true
+        val player = splashPlayer ?: return
+        if (splashPausedAtLogo) {
+            splashPausedAtLogo = false
+            splashIndicator?.visibility = android.view.View.GONE
+            player.start()
+        }
+    }
+
+    private fun dismissSplash() {
+        splashOverlay?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        splashOverlay = null
+        splashIndicator = null
+        splashPlayer?.release()
+        splashPlayer = null
+        _splashFinished.value = true
+    }
+
+    private fun attachSplashOverlay() {
+        val player = splashPlayer ?: return
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val density = resources.displayMetrics.density
+
+        val container = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+        }
+
+        val surfaceView = android.view.SurfaceView(this)
+        container.addView(surfaceView, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        val indicator = android.widget.ProgressBar(this).apply {
+            indeterminateTintList =
+                android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
+            visibility = android.view.View.GONE
+        }
+        container.addView(indicator, android.widget.FrameLayout.LayoutParams(
+            (36 * density).toInt(), (36 * density).toInt()
+        ).apply {
+            gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+            bottomMargin = (80 * density).toInt()
+        })
+        splashIndicator = indicator
+
+        player.setOnCompletionListener { dismissSplash() }
+
+        surfaceView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                player.setDisplay(holder)
+                player.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                player.start()
+
+                val pollRunnable = object : Runnable {
+                    override fun run() {
+                        try {
+                            if (player.isPlaying && player.currentPosition >= SPLASH_PAUSE_MS) {
+                                if (splashAppReady) {
+                                    // App loaded before pause point — let video play through
+                                } else {
+                                    player.pause()
+                                    splashPausedAtLogo = true
+                                    indicator.visibility = android.view.View.VISIBLE
+                                }
+                            } else if (player.isPlaying) {
+                                handler.postDelayed(this, 50)
+                            }
+                        } catch (_: IllegalStateException) { /* released */ }
+                    }
+                }
+                handler.postDelayed(pollRunnable, 50)
+            }
+
+            override fun surfaceChanged(
+                h: android.view.SurfaceHolder, f: Int, w: Int, height: Int
+            ) {}
+
+            override fun surfaceDestroyed(h: android.view.SurfaceHolder) {}
+        })
+
+        addContentView(container, android.view.ViewGroup.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        splashOverlay = container
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val showSplash = savedInstanceState?.getBoolean(KEY_SPLASH_SHOWN) != true
+        if (!showSplash) _splashFinished.value = true
+
+        if (showSplash) {
+            // Pre-prepare splash video — synchronous but near-instant for a small raw resource.
+            splashPlayer = try {
+                MediaPlayer().apply {
+                    resources.openRawResourceFd(R.raw.splash_video).use { afd ->
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    }
+                    isLooping = false
+                    prepare()
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         setContent {
+
             val mainViewModel = hiltViewModel<MainViewModel>()
             val themeManager = hiltViewModel<ThemeManager>()
             val currentProfile by mainViewModel.activeProfile.collectAsState()
@@ -485,6 +717,7 @@ class MainActivity : ComponentActivity() {
             var selectedPlaybackPoster by rememberSaveable { mutableStateOf("") }
             var previousView by rememberSaveable { mutableStateOf("menu") }
             val playerState = remember { PlayerState() }
+            var showTorrentUnsupportedDialog by remember { mutableStateOf(false) }
 
             LaunchedEffect(currentProfile?.id) {
                 val profileId = currentProfile?.id
@@ -505,7 +738,7 @@ class MainActivity : ComponentActivity() {
 
             // Resolve theme from profile's themeId
             val currentTheme by themeManager.currentTheme.collectAsState()
-            
+
             // Get round corners setting from profile (default true)
             val roundCorners = currentProfile?.roundCorners ?: true
             val hubRoundCorners = currentProfile?.hubRoundCorners ?: true
@@ -516,6 +749,15 @@ class MainActivity : ComponentActivity() {
                     themeManager.setCurrentProfile(profile.id, profile.themeId)
                 }
             }
+
+            // Signal native splash to resume once first composition is done
+            LaunchedEffect(Unit) { onSplashAppReady() }
+
+            // Auto-check for updates on launch
+            val updateState by appUpdateManager.state.collectAsState()
+            var updateDismissed by rememberSaveable { mutableStateOf(false) }
+            val updateScope = rememberCoroutineScope()
+            LaunchedEffect(Unit) { appUpdateManager.checkForUpdate() }
 
             LumeraTheme(theme = currentTheme) {
                 CompositionLocalProvider(
@@ -542,7 +784,6 @@ class MainActivity : ComponentActivity() {
                                         sessionRestoreAttemptedProfileId = null
                                         mainViewModel.login(it.id)
                                     }
-                                    // Removed onAddProfile (Handled internally by ProfileScreen Wizard)
                                 )
                             }
                         }
@@ -566,8 +807,6 @@ class MainActivity : ComponentActivity() {
 
                         // Track where we came from for proper back navigation
                         val uiScope = rememberCoroutineScope()
-
-                        // Focus Traffic Control
 
                         // Focus Traffic Control
                         val drawerRequesters = remember { NavDestination.values().associateWith { FocusRequester() } }
@@ -660,6 +899,7 @@ class MainActivity : ComponentActivity() {
                                             sessionProfileId = null
                                             sessionRestoreAttemptedProfileId = null
                                             activeView = "menu"
+                                            themeManager.resetTheme()
                                             mainViewModel.logout()
                                         },
                                         onExit = { finishAffinity() },
@@ -755,6 +995,7 @@ class MainActivity : ComponentActivity() {
                                                     sessionProfileId = null
                                                     sessionRestoreAttemptedProfileId = null
                                                     activeView = "menu"
+                                                    themeManager.resetTheme()
                                                     mainViewModel.logout()
                                                 }
                                                 NavDestination.Settings -> {
@@ -873,6 +1114,7 @@ class MainActivity : ComponentActivity() {
                                                     sessionProfileId = null
                                                     sessionRestoreAttemptedProfileId = null
                                                     activeView = "menu"
+                                                    themeManager.resetTheme()
                                                     mainViewModel.logout()
                                                 }
                                                 NavDestination.Settings -> {
@@ -981,28 +1223,7 @@ class MainActivity : ComponentActivity() {
                                         candidateStreams = sourcePayloadInput
                                     )
                                     if (url.startsWith("magnet:")) {
-                                        Toast.makeText(this@MainActivity, "Starting Torrent Engine...", Toast.LENGTH_SHORT).show()
-                                        val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
-                                            putExtra("MAGNET_LINK", url)
-                                        }
-                                        if (Build.VERSION.SDK_INT >= 34) startForegroundService(intent) else startService(intent)
-                                        TorrentService.onStreamReady = { localUrl ->
-                                            uiScope.launch {
-                                                mainViewModel.persistActiveProfileState()
-                                                selectedPlaybackId = playbackId
-                                                selectedPlaybackType = playbackType
-                                                selectedPlaybackTitle = resolvedPlaybackTitle
-                                                selectedPlaybackPoster = selectedMoviePoster
-                                                playerState.selectedPlayerSubtitles = subtitlePayload
-                                                playerState.selectedPlayerSources = sourcePayload
-                                                selectedVideoUrl = localUrl
-                                                when (currentProfile?.playerPreference) {
-                                                    "external" -> launchExternalPlayer(this@MainActivity, localUrl)
-                                                    "ask" -> playerState.showPlayerChoiceDialog = true
-                                                    else -> activeView = "player"
-                                                }
-                                            }
-                                        }
+                                        showTorrentUnsupportedDialog = true
                                     } else {
                                         uiScope.launch {
                                             mainViewModel.persistActiveProfileState()
@@ -1242,22 +1463,7 @@ class MainActivity : ComponentActivity() {
                                             playerState.currentStream = streamToPlay
 
                                             if (nextUrl.startsWith("magnet:")) {
-                                                Toast.makeText(this@MainActivity, "Starting Torrent Engine...", Toast.LENGTH_SHORT).show()
-                                                val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
-                                                    putExtra("MAGNET_LINK", nextUrl)
-                                                }
-                                                if (Build.VERSION.SDK_INT >= 34) startForegroundService(intent) else startService(intent)
-                                                TorrentService.onStreamReady = { localUrl ->
-                                                    uiScope.launch {
-                                                        selectedPlaybackId = nextPlaybackId
-                                                        selectedPlaybackType = "series"
-                                                        selectedPlaybackTitle = nextPlaybackTitle
-                                                        playerState.selectedPlayerSubtitles = subtitlePayload
-                                                        playerState.selectedPlayerSources = sourcePayload
-                                                        selectedVideoUrl = localUrl
-                                                        activeView = "player"
-                                                    }
-                                                }
+                                                showTorrentUnsupportedDialog = true
                                             } else {
                                                 selectedPlaybackId = nextPlaybackId
                                                 selectedPlaybackType = "series"
@@ -1390,21 +1596,7 @@ class MainActivity : ComponentActivity() {
                                             playerState.currentStream = streamToPlay
 
                                             if (epUrl.startsWith("magnet:")) {
-                                                Toast.makeText(this@MainActivity, "Starting Torrent Engine...", Toast.LENGTH_SHORT).show()
-                                                val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
-                                                    putExtra("MAGNET_LINK", epUrl)
-                                                }
-                                                if (Build.VERSION.SDK_INT >= 34) startForegroundService(intent) else startService(intent)
-                                                TorrentService.onStreamReady = { localUrl ->
-                                                    uiScope.launch {
-                                                        selectedPlaybackId = epPlaybackId
-                                                        selectedPlaybackType = "series"
-                                                        selectedPlaybackTitle = epTitle
-                                                        playerState.selectedPlayerSubtitles = subtitlePayload
-                                                        playerState.selectedPlayerSources = sourcePayload
-                                                        selectedVideoUrl = localUrl
-                                                    }
-                                                }
+                                                showTorrentUnsupportedDialog = true
                                             } else {
                                                 selectedPlaybackId = epPlaybackId
                                                 selectedPlaybackType = "series"
@@ -1470,21 +1662,7 @@ class MainActivity : ComponentActivity() {
                                         playerState.pendingEpisodeSwitch = null
 
                                         if (sourceUrl.startsWith("magnet:")) {
-                                            Toast.makeText(this@MainActivity, "Starting Torrent Engine...", Toast.LENGTH_SHORT).show()
-                                            val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
-                                                putExtra("MAGNET_LINK", sourceUrl)
-                                            }
-                                            if (Build.VERSION.SDK_INT >= 34) startForegroundService(intent) else startService(intent)
-                                            TorrentService.onStreamReady = { localUrl ->
-                                                uiScope.launch {
-                                                    selectedPlaybackId = pending.playbackId
-                                                    selectedPlaybackType = "series"
-                                                    selectedPlaybackTitle = pending.playbackTitle
-                                                    playerState.selectedPlayerSubtitles = subtitlePayload
-                                                    playerState.selectedPlayerSources = sourcePayload
-                                                    selectedVideoUrl = localUrl
-                                                }
-                                            }
+                                            showTorrentUnsupportedDialog = true
                                         } else {
                                             selectedPlaybackId = pending.playbackId
                                             selectedPlaybackType = "series"
@@ -1531,9 +1709,55 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    // Torrent unsupported dialog
+                    if (showTorrentUnsupportedDialog) {
+                        VoidDialog(
+                            onDismissRequest = { showTorrentUnsupportedDialog = false },
+                            title = "Torrents Not Supported"
+                        ) {
+                            Text(
+                                "Torrent streaming is not supported in this version.",
+                                color = Color.Gray
+                            )
+                            Spacer(Modifier.height(24.dp))
+                            VoidButton(
+                                "Close",
+                                { showTorrentUnsupportedDialog = false },
+                                Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // Update available dialog (auto-shown after splash)
+                    if (_splashFinished.value && !updateDismissed && appUpdateManager.isPopupEnabled && updateState is UpdateState.UpdateAvailable) {
+                        val info = (updateState as UpdateState.UpdateAvailable).info
+                        UpdateAvailableDialog(
+                            info = info,
+                            onUpdate = {
+                                updateDismissed = true
+                                updateScope.launch { appUpdateManager.downloadAndInstall(info.apkUrl) }
+                            },
+                            onDismiss = { updateDismissed = true },
+                            onDontShowAgain = {
+                                appUpdateManager.setPopupEnabled(false)
+                                updateDismissed = true
+                            }
+                        )
+                    }
                 }
                 }
             }
         }
+
+        // Attach native splash overlay on top of Compose content — renders immediately
+        if (showSplash) {
+            attachSplashOverlay()
+        }
+    }
+
+    companion object {
+        private const val SPLASH_PAUSE_MS = 4500
+        private const val KEY_SPLASH_SHOWN = "splash_shown"
     }
 }

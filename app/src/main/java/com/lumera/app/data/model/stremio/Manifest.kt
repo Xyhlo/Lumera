@@ -1,7 +1,6 @@
 package com.lumera.app.data.model.stremio
 
-import com.google.gson.JsonElement // <--- We need this import to handle dynamic types
-import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonElement
 
 // Tells us what the addon can do (stream, catalog, meta)
 data class Manifest(
@@ -10,8 +9,7 @@ data class Manifest(
     val version: String,
     val description: String? = null,
 
-    // FIX: Changed from List<String> to List<JsonElement>
-    // This allows it to accept both Cinemeta (Strings) and Torrentio (Objects)
+    // List<JsonElement> accepts both Cinemeta (Strings) and Torrentio (Objects)
     val resources: List<JsonElement>,
 
     val types: List<String>,

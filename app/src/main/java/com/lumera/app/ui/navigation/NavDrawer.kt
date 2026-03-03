@@ -34,7 +34,6 @@ import androidx.tv.material3.Surface
 import com.lumera.app.R
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.ui.profiles.ProfileAssets
-import com.lumera.app.ui.theme.VoidBlack
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip

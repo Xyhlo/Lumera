@@ -8,13 +8,11 @@ data class HubRowEntity(
     @PrimaryKey val id: String,
     val title: String = "Hub Row",
     val shape: String,
-    
-    // Independent Visibility
+
     val showInHome: Boolean = false,
     val showInMovies: Boolean = false,
     val showInSeries: Boolean = false,
 
-    // Independent Ordering
     val homeOrder: Int = 999,
     val moviesOrder: Int = 999,
     val seriesOrder: Int = 999,

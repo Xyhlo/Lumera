@@ -8,7 +8,6 @@ data class MetaResponse(
     val meta: MetaItem
 )
 
-// This is the class MainActivity is looking for!
 @Immutable
 data class MetaItem(
     val id: String,
@@ -30,7 +29,6 @@ data class MetaItem(
 data class MetaVideo(
     val id: String = "",
 
-    // FIX: Accept "title" OR "name" from JSON
     @SerializedName(value = "title", alternate = ["name"])
     val title: String = "Episode",
 

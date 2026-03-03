@@ -20,7 +20,7 @@ object ImageLoaderModule {
     @Singleton
     fun provideImageLoader(
         @ApplicationContext context: Context,
-        okHttpClient: OkHttpClient // Reuse existing OkHttpClient from NetworkModule
+        okHttpClient: OkHttpClient
     ): ImageLoader {
         return ImageLoader.Builder(context)
             // Use shared OkHttpClient with connection pooling

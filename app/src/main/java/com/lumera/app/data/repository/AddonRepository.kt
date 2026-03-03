@@ -1,6 +1,5 @@
 package com.lumera.app.data.repository
 
-import android.content.Context
 import com.google.gson.Gson
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.AddonEntity
@@ -13,7 +12,6 @@ import com.lumera.app.domain.HomeRow
 import com.lumera.app.domain.HubGroupRow
 import com.lumera.app.domain.HubItem
 import com.lumera.app.domain.HubShape
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,41 +24,12 @@ import javax.inject.Singleton
 @Singleton
 class AddonRepository @Inject constructor(
     private val api: StremioApiService,
-    private val dao: AddonDao,
-    @ApplicationContext private val context: Context
+    private val dao: AddonDao
 ) {
     private val gson = Gson()
     private val MAX_CATALOG_PAGES = 30
     private val CATALOG_TIMEOUT_MS = 10_000L // 10 seconds per catalog request
     private val STREAM_TIMEOUT_MS = 20_000L  // 20 seconds per stream request (torrent addons need more time)
-
-    /**
-     * Fetches all pages of a catalog using Stremio's skip parameter.
-     * URL pattern: {transportUrl}/catalog/{type}/{id}/skip={n}.json
-     *
-     * Uses cumulative item count for skip (not fixed page boundaries),
-     * and deduplicates items across pages, matching Stremio behavior.
-     */
-    private suspend fun fetchPaginatedCatalog(baseUrl: String): List<MetaItem> {
-        val allMetas = mutableListOf<MetaItem>()
-        val seenIds = mutableSetOf<String>()
-        for (page in 0 until MAX_CATALOG_PAGES) {
-            val skip = allMetas.size
-            val url = if (skip == 0) baseUrl else {
-                baseUrl.replace(".json", "/skip=$skip.json")
-            }
-            try {
-                val response = withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }
-                if (response.metas.isEmpty()) break
-                val newUnique = response.metas.filter { item ->
-                    seenIds.add("${item.type}:${item.id}")
-                }
-                if (newUnique.isEmpty()) break // All duplicates — stop
-                allMetas.addAll(newUnique)
-            } catch (e: Exception) { break }
-        }
-        return allMetas
-    }
 
     /**
      * Fetches a single page of catalog items at the given skip offset.
@@ -76,7 +45,6 @@ class AddonRepository @Inject constructor(
     }
 
 
-    // 1. UNIVERSAL SEARCH
     suspend fun searchMovies(query: String): List<MetaItem> = withContext(Dispatchers.IO) {
         if (query.length < 3) return@withContext emptyList()
 
@@ -106,7 +74,6 @@ class AddonRepository @Inject constructor(
         return catalog.extra.any { it.name == "skip" }
     }
 
-    // 2. DISCOVER CATALOGS
     data class DiscoverCatalog(
         val transportUrl: String,
         val addonName: String,
@@ -174,7 +141,6 @@ class AddonRepository @Inject constructor(
         } catch (e: Exception) { emptyList() }
     }
 
-    // 3. DYNAMIC DASHBOARD ENGINE
     suspend fun getDashboardRows(
         screen: String,
         skipConfigs: Int = 0,
@@ -184,10 +150,6 @@ class AddonRepository @Inject constructor(
         val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
         val configs = dao.getAllCatalogConfigs().firstOrNull() ?: emptyList()
         val addonMap = addons.associateBy { it.transportUrl }
-
-        // OPTIMIZATION: Removed on-the-fly config generation.
-        // Configs are now only generated during addon installation/update.
-        // This prevents massive DB writes during simple navigation.
 
         val filteredConfigs = configs
             .filter { config ->
@@ -333,9 +295,7 @@ class AddonRepository @Inject constructor(
             }
     }
 
-    // 3. STREAM AGGREGATOR
     suspend fun getStreams(type: String, id: String): List<Stream> = withContext(Dispatchers.IO) {
-        val allStreams = mutableListOf<Stream>()
         val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
 
         val jobs = addons.map { addon ->
@@ -354,12 +314,9 @@ class AddonRepository @Inject constructor(
             }
         }
 
-        jobs.awaitAll().forEach { allStreams.addAll(it) }
-        return@withContext allStreams
+        jobs.awaitAll().flatten()
     }
 
-    // 4. ADDON MANAGEMENT
-    // This is wrapped in IO to prevent the database conflict with ProfileScreen
     suspend fun installAddonWithConfig(url: String, home: Boolean, movies: Boolean, series: Boolean) = withContext(Dispatchers.IO) {
         val manifest = api.getManifest(url)
         val transportUrl = url.removeSuffix("/manifest.json")
@@ -405,15 +362,5 @@ class AddonRepository @Inject constructor(
     fun getAddons() = dao.getAllAddons()
     suspend fun updateAddons(addons: List<AddonEntity>) = withContext(Dispatchers.IO) { dao.insertAddons(addons) }
 
-    // 5. PLAYER & META
     suspend fun getMetaDetails(url: String) = withContext(Dispatchers.IO) { api.getMeta(url).meta }
-    suspend fun getMetadata(type: String, id: String): MetaItem? = withContext(Dispatchers.IO) {
-        val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
-        for (addon in addons) {
-            try {
-                return@withContext api.getMeta("${addon.transportUrl}/meta/$type/$id.json").meta
-            } catch (e: Exception) { }
-        }
-        return@withContext try { api.getMeta("https://v3-cinemeta.strem.io/meta/$type/$id.json").meta } catch (e: Exception) { null }
-    }
 }

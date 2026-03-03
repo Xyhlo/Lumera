@@ -17,9 +17,6 @@ class LumeraApplication : Application(), ImageLoaderFactory {
     
     override fun onCreate() {
         super.onCreate()
-        // Start warmup immediately on app launch
-        // This primes the image decoder pool and memory cache
-        // while the user is still on the profile selection screen
         startupOptimizer.warmup()
     }
     

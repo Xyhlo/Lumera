@@ -518,7 +518,6 @@ private fun InfiniteGridContent(
     
     // Calculate total items and start position
     val totalItems = sectionSize * INFINITE_LOOP_GENERATIONS
-    val startIndex = 0
 
     // Prefetch image URLs list
     val imageUrls = remember(truncatedMovies) { truncatedMovies.map { it.poster } }
@@ -586,7 +585,7 @@ private fun InfiniteGridContent(
         ) { scrollIndex ->
             val logicalIndex = scrollIndex % sectionSize
             val item = baseDataList[logicalIndex]
-            val isEntryItem = scrollIndex == startIndex
+            val isEntryItem = scrollIndex == 0
             val isLoopStart = logicalIndex == 0
 
             // For focus restoration: match by item ID, only in the current visible section
@@ -716,7 +715,7 @@ private fun InfiniteGridContent(
     // Skip initialization if this is a restored state (coming back to this row)
     LaunchedEffect(Unit) {
         if (!isRestoredState && listState.firstVisibleItemIndex == 0) {
-            listState.scrollToItem(startIndex)
+            listState.scrollToItem(0)
         }
     }
 }

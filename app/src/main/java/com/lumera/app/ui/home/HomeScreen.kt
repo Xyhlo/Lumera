@@ -12,12 +12,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +28,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -120,34 +117,39 @@ fun HomeScreen(
 
     // Track if content has focus to conditionally enable BackHandler
     var isContentFocused by remember { mutableStateOf(false) }
+    // Guards against double-back race: when returning from details, focus restoration
+    // takes ~200ms. Until focus is established, keep BackHandler enabled so a quick
+    // second back press doesn't exit the app. Resets on each fresh composition.
+    var focusEverSet by remember { mutableStateOf(false) }
 
     // Only enable explicit back handling if:
     // 1. We are in Side-Nav mode (Always handle)
     // 2. We are in Top-Nav mode AND content is focused (Handle = Open Nav)
-    // If Top-Nav mode AND content is NOT focused (Nav is focused), disable this handler
-    // so TopNavigationBar's handler can "Close Nav" (return to content).
-    BackHandler(enabled = !isTopNav || isContentFocused) {
+    // 3. Top-Nav mode AND focus not yet established (transition guard)
+    // If Top-Nav mode AND content is NOT focused AND focus was already set, disable this
+    // handler so TopNavigationBar's handler can "Close Nav" (return to content).
+    BackHandler(enabled = !isTopNav || isContentFocused || !focusEverSet) {
         drawerRequester.requestFocus()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onFocusChanged { isContentFocused = it.hasFocus }
+            .onFocusChanged {
+                isContentFocused = it.hasFocus
+                if (it.hasFocus) focusEverSet = true
+            }
     ) {
         LumeraBackground {
         // LOGIC: If we are just starting OR the ViewModel is loading, show the Loading Box.
         // This box accepts focus immediately, which forces the NavDrawer to collapse.
-        if (state.isLoading || state.loadedScreen != screenName) {
+        if (state.isLoading || state.loadedScreen != screenName || state.loadedProfileId != currentProfile?.id) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusRequester(entryRequester) // Capture focus here!
-                    .onFocusChanged { }
-                    .focusable() // Make it focusable
+                    .focusRequester(entryRequester)
+                    .focusable()
             ) {
-                // Optional: You can put a CircularProgressIndicator here if you want.
-                // For now, keeping it empty/black is cleaner for transitions.
             }
         } else {
             // DATA IS READY: Show Content
@@ -296,9 +298,6 @@ fun CinematicLayout(
         }
 
         // SMART FOCUS:
-        // We are now safe to request focus because HomeScreen ensures we only reach here when data is ready.
-        // SMART FOCUS:
-        // We are now safe to request focus because HomeScreen ensures we only reach here when data is ready.
         // We are now safe to request focus because HomeScreen ensures we only reach here when data is ready.
         if (!hasRequestedFocus && (state.history.isNotEmpty() || state.mixedRows.isNotEmpty())) {
             delay(100)
@@ -601,22 +600,14 @@ fun CinematicLayout(
                                     val resetScroll = historyFocusRedirected && state.history.isEmpty() && index == 0
                                     val savedPosition = if (resetScroll) null else rowScrollPositions[rowKey]
 
-                                    // For infinite loop rows, calculate proper initial position in middle of list
-                                    // This matches the startIndex calculation in InfiniteGridContent
-                                    val initialIndex = if (savedPosition != null) {
-                                        savedPosition.first
-                                    } else if (item.isInfiniteLoopEnabled && item.isInfiniteScrollingEnabled) {
-                                        0
-                                    } else {
-                                        0
-                                    }
+                                    val initialIndex = savedPosition?.first ?: 0
                                     val initialOffset = savedPosition?.second ?: 0
-                                    
+
                                     val rowListState = rememberLazyListState(
                                         initialFirstVisibleItemIndex = initialIndex,
                                         initialFirstVisibleItemScrollOffset = initialOffset
                                     )
-                                    
+
                                     PersistLazyListPosition(
                                         listState = rowListState,
                                         key = "cinematic_$rowKey",
@@ -887,9 +878,7 @@ fun SimpleLayout(
 
     // Smooth vertical scrolling pivot for Simple layout
     val density = LocalDensity.current
-    // Adjust pivot with offset (40dp difference maintained)
 
-    
     // Skip vertical scroll on restoration (when we have a saved focus key)
     val isVerticalRestoration = effectiveLastFocusedKey != null
     var skipVerticalScroll by remember { mutableStateOf(isVerticalRestoration) }
@@ -1083,15 +1072,7 @@ fun SimpleLayout(
                         val resetScroll = historyFocusRedirected && historyItems.isEmpty() && rowIndex == 0
                         val savedPosition = if (resetScroll) null else rowScrollPositions[rowKey]
 
-                        // For infinite loop rows, calculate proper initial position in middle of list
-                        // This matches the startIndex calculation in InfiniteGridContent
-                        val initialIndex = if (savedPosition != null) {
-                            savedPosition.first
-                        } else if (item.isInfiniteLoopEnabled && item.isInfiniteScrollingEnabled) {
-                            0
-                        } else {
-                            0
-                        }
+                        val initialIndex = savedPosition?.first ?: 0
                         val initialOffset = savedPosition?.second ?: 0
 
                         val rowListState = rememberLazyListState(
@@ -1202,7 +1183,6 @@ private fun PersistLazyListPosition(
     }
 }
 
-// Background, Badge, FocusPivotSpec remain unchanged (copy from previous)
 @Composable
 fun CinematicBackground(item: MetaItem?) {
     // Use the theme's actual background color

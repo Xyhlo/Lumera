@@ -25,8 +25,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SpaceBar
@@ -68,7 +66,6 @@ import com.lumera.app.ui.details.FilterDropdown
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.home.ViewMoreCard
 import com.lumera.app.ui.utils.ImagePrefetcher
-import com.lumera.app.ui.theme.VoidBlack
 import kotlinx.coroutines.delay
 
 private const val PREVIEW_COUNT = 4
@@ -102,9 +99,16 @@ fun SearchScreen(
     val isTopNav = currentProfile?.navPosition == "top"
 
     var isContentFocused by remember { mutableStateOf(false) }
+    // Guards against double-back race: when returning from details, focus restoration
+    // takes ~200ms. Until focus is established, keep BackHandler enabled so a quick
+    // second back press doesn't exit the app. Resets on each fresh composition.
+    var focusEverSet by remember { mutableStateOf(false) }
+
+    // Hoisted so it survives DiscoverGrid being removed/re-added when query toggles around 3 chars
+    var discoverFocusRestored by remember { mutableStateOf(false) }
 
     // BACK: Go to Drawer
-    BackHandler(enabled = !isTopNav || isContentFocused) {
+    BackHandler(enabled = !isTopNav || isContentFocused || !focusEverSet) {
         drawerRequester.requestFocus()
     }
 
@@ -122,7 +126,10 @@ fun SearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onFocusChanged { isContentFocused = it.hasFocus }
+            .onFocusChanged {
+                isContentFocused = it.hasFocus
+                if (it.hasFocus) focusEverSet = true
+            }
     ) {
         LumeraBackground {
         Row(
@@ -293,6 +300,8 @@ fun SearchScreen(
                             onScrollPositionChange = { index, offset ->
                                 viewModel.updateDiscoverScrollPosition(index, offset)
                             },
+                            focusRestored = discoverFocusRestored,
+                            onFocusRestored = { discoverFocusRestored = true },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -558,6 +567,8 @@ private fun DiscoverGrid(
     initialScrollIndex: Int = 0,
     initialScrollOffset: Int = 0,
     onScrollPositionChange: (Int, Int) -> Unit = { _, _ -> },
+    focusRestored: Boolean = false,
+    onFocusRestored: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -586,9 +597,6 @@ private fun DiscoverGrid(
     )
     val cardRequesters = remember { mutableMapOf<Int, FocusRequester>() }
     var pendingDirectionalTargetIndex by remember { mutableStateOf<Int?>(null) }
-
-    // Track focus restored state
-    var focusRestored by remember { mutableStateOf(false) }
 
     // Persist scroll position back to ViewModel
     LaunchedEffect(gridState) {
@@ -622,7 +630,7 @@ private fun DiscoverGrid(
         if (!focusRestored && lastFocusedId != null && gridState.layoutInfo.totalItemsCount > 0) {
             kotlinx.coroutines.delay(16)
             discoverRequester.requestFocus()
-            focusRestored = true
+            onFocusRestored()
         }
     }
 
@@ -779,7 +787,6 @@ fun TvKeyboard(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxWidth(),
-        // FIX: 11dp padding as requested
         contentPadding = PaddingValues(top = 11.dp, start = 6.dp, end = 6.dp, bottom = 10.dp)
     ) {
         itemsIndexed(keys) { index, key ->
