@@ -2,7 +2,8 @@
 
 A feature-rich Android TV streaming application built with Kotlin and Jetpack Compose for TV.
 
-Browse, discover, and stream content from Stremio-compatible addons — all from your couch with a TV remote. Connect your Stremio account to instantly import your existing addon collection.
+Browse, discover, and stream content from Stremio-compatible addons.
+Connect your Stremio account to instantly import your existing addon collection.
 
 ![Lumera](screenshots/banner.png)
 
@@ -29,7 +30,7 @@ Browse, discover, and stream content from Stremio-compatible addons — all from
 - Automatic catalog loading from all enabled addons
 
 ### Custom Hub Rows
-- Create your own hub rows — themed collections of category cards displayed on the home screen
+- Create your own hub rows: themed collections of category cards displayed on the home screen
 - Pick a card shape per row: horizontal (16:9), vertical (2:3), or square (1:1)
 - Fill each hub with categories from any installed addon (e.g. "Netflix Trending", "IMDB Top 250", "Action Movies")
 - Upload custom card images directly from your phone via QR code
