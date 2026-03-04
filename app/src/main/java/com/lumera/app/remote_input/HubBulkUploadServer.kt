@@ -253,7 +253,7 @@ class HubBulkUploadServer(
                 <script>
                     var CROP_WIDTH = $cropWidth;
                     var CROP_HEIGHT = $cropHeight;
-                    var items = [$itemsJson];
+                    var items = $itemsJson;
                     var previews = {};
 
                     var listView = document.getElementById('list-view');

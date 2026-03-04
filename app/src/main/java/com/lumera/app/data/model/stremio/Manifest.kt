@@ -10,10 +10,10 @@ data class Manifest(
     val description: String? = null,
 
     // List<JsonElement> accepts both Cinemeta (Strings) and Torrentio (Objects)
-    val resources: List<JsonElement>,
+    val resources: List<JsonElement>? = null,
 
-    val types: List<String>,
-    val catalogs: List<CatalogManifest> = emptyList(),
+    val types: List<String>? = null,
+    val catalogs: List<CatalogManifest>? = null,
     val logo: String? = null
 )
 
@@ -21,7 +21,7 @@ data class CatalogManifest(
     val type: String,
     val id: String,
     val name: String,
-    val extra: List<CatalogExtra> = emptyList()
+    val extra: List<CatalogExtra>? = null
 )
 
 data class CatalogExtra(

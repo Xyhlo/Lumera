@@ -41,6 +41,6 @@ data class MetaVideo(
 
 @Immutable
 data class CatalogResponse(
-    val metas: List<MetaItem>,
+    val metas: List<MetaItem>? = null,
     val hasMore: Boolean? = null
 )

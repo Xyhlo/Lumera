@@ -65,7 +65,7 @@ class AddonsViewModel @Inject constructor(
             try {
                 val validUrl = if (url.endsWith("manifest.json")) url else "$url/manifest.json"
                 val manifest = repository.fetchManifest(validUrl)
-                val displayableCatalogs = manifest.catalogs.filter { catalog ->
+                val displayableCatalogs = manifest.catalogs.orEmpty().filter { catalog ->
                     val isStandardType = catalog.type == "movie" || catalog.type == "series" || catalog.type == "channel" || catalog.type == "tv"
                     isStandardType
                 }

@@ -1,7 +1,7 @@
 package com.lumera.app.data.model.stremio
 
 data class StreamResponse(
-    val streams: List<Stream>
+    val streams: List<Stream>? = null
 )
 
 data class SubtitleResponse(

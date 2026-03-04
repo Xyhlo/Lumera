@@ -154,7 +154,7 @@ class SubtitleRepository @Inject constructor(
     }
 
     private fun parseSubtitleResourceRules(manifest: Manifest): List<SubtitleResourceRule> {
-        return manifest.resources.mapNotNull { resource ->
+        return manifest.resources.orEmpty().mapNotNull { resource ->
             parseSubtitleResourceRule(resource)
         }
     }

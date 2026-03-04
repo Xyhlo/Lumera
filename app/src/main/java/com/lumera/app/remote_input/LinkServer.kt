@@ -149,9 +149,9 @@ class LinkServer(
                         btn.disabled = true;
                         btn.textContent = 'Sending...';
                         try {
-                            const formData = new FormData();
-                            formData.append('url', url);
-                            await fetch('/', { method: 'POST', body: formData });
+                            const formData = new FormData(document.getElementById('pasteForm'));
+                            const res = await fetch('/', { method: 'POST', body: formData });
+                            if (!res.ok) throw new Error('Server rejected the request');
                             document.getElementById('form-container').style.display = 'none';
                             document.getElementById('success-container').style.display = 'block';
                         } catch (err) {

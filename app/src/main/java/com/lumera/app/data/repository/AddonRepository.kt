@@ -40,7 +40,7 @@ class AddonRepository @Inject constructor(
             val url = if (skip == 0) baseUrl else {
                 baseUrl.replace(".json", "/skip=$skip.json")
             }
-            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas
+            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty()
         } catch (e: Exception) { emptyList() }
     }
 
@@ -50,13 +50,17 @@ class AddonRepository @Inject constructor(
 
         val movieJob = async {
             try {
-                withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog("https://v3-cinemeta.strem.io/catalog/movie/top/search=$query.json") }.metas
+                withTimeout(CATALOG_TIMEOUT_MS) {
+                    api.getCatalog("https://v3-cinemeta.strem.io/catalog/movie/top/search=$query.json")
+                }.metas.orEmpty()
             } catch (e: Exception) { emptyList() }
         }
 
         val seriesJob = async {
             try {
-                withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog("https://v3-cinemeta.strem.io/catalog/series/top/search=$query.json") }.metas
+                withTimeout(CATALOG_TIMEOUT_MS) {
+                    api.getCatalog("https://v3-cinemeta.strem.io/catalog/series/top/search=$query.json")
+                }.metas.orEmpty()
             } catch (e: Exception) { emptyList() }
         }
 
@@ -68,10 +72,10 @@ class AddonRepository @Inject constructor(
      */
     private fun catalogSupportsSkip(addon: AddonEntity, catalogType: String, catalogId: String): Boolean {
         val catalogs: List<CatalogManifest> = try {
-            gson.fromJson(addon.catalogsJson, Array<CatalogManifest>::class.java).toList()
+            gson.fromJson(addon.catalogsJson, Array<CatalogManifest>::class.java)?.toList()?.filterNotNull() ?: return false
         } catch (_: Exception) { return false }
         val catalog = catalogs.find { it.type == catalogType && it.id == catalogId } ?: return false
-        return catalog.extra.any { it.name == "skip" }
+        return catalog.extra?.any { it.name == "skip" } ?: false
     }
 
     data class DiscoverCatalog(
@@ -90,19 +94,19 @@ class AddonRepository @Inject constructor(
 
         for (addon in addons) {
             val catalogs: List<CatalogManifest> = try {
-                gson.fromJson(addon.catalogsJson, Array<CatalogManifest>::class.java).toList()
+                gson.fromJson(addon.catalogsJson, Array<CatalogManifest>::class.java)?.toList()?.filterNotNull() ?: continue
             } catch (e: Exception) { continue }
 
             for (catalog in catalogs) {
                 // Exclude search-only catalogs (required search extra)
-                val hasRequiredSearch = catalog.extra.any { it.name == "search" && it.isRequired }
+                val hasRequiredSearch = catalog.extra?.any { it.name == "search" && it.isRequired } ?: false
                 if (hasRequiredSearch) continue
 
                 val genres = catalog.extra
-                    .firstOrNull { it.name == "genre" }
+                    ?.firstOrNull { it.name == "genre" }
                     ?.options ?: emptyList()
 
-                val supportsSkip = catalog.extra.any { it.name == "skip" }
+                val supportsSkip = catalog.extra?.any { it.name == "skip" } ?: false
 
                 result.add(DiscoverCatalog(
                     transportUrl = addon.transportUrl,
@@ -137,7 +141,7 @@ class AddonRepository @Inject constructor(
         }
 
         try {
-            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas
+            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty()
         } catch (e: Exception) { emptyList() }
     }
 
@@ -179,7 +183,7 @@ class AddonRepository @Inject constructor(
                 try {
                     val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
                     // Fetch only the first page for fast initial load
-                    val metas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas } catch (e: Exception) { emptyList() }
+                    val metas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty() } catch (e: Exception) { emptyList() }
                     if (metas.isNotEmpty()) {
                         val typeSuffix = config.catalogType.replaceFirstChar { it.uppercase() }
                         val defaultTitle = if (config.catalogName != null) "${config.catalogName} - ${typeSuffix}" else "${config.addonName} - ${config.catalogId.replaceFirstChar { it.uppercase() }}"
@@ -223,7 +227,7 @@ class AddonRepository @Inject constructor(
         try {
             val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
             val metas = try {
-                withTimeout(timeoutMs) { api.getCatalog(url) }.metas
+                withTimeout(timeoutMs) { api.getCatalog(url) }.metas.orEmpty()
             } catch (_: Exception) {
                 emptyList()
             }.take(maxItems.coerceAtLeast(1))
@@ -304,7 +308,7 @@ class AddonRepository @Inject constructor(
                     val url = "${addon.transportUrl}/stream/$type/$id.json"
                     val response = withTimeout(STREAM_TIMEOUT_MS) { api.getStreams(url) }
                     val sourceLabel = addon.nickname ?: addon.name
-                    response.streams.map { stream ->
+                    response.streams.orEmpty().map { stream ->
                         stream.copy(
                             name = "[$sourceLabel] ${stream.name ?: ""}".trim(),
                             addonTransportUrl = addon.transportUrl
@@ -320,7 +324,7 @@ class AddonRepository @Inject constructor(
     suspend fun installAddonWithConfig(url: String, home: Boolean, movies: Boolean, series: Boolean) = withContext(Dispatchers.IO) {
         val manifest = api.getManifest(url)
         val transportUrl = url.removeSuffix("/manifest.json")
-        val catalogsJson = gson.toJson(manifest.catalogs)
+        val catalogsJson = gson.toJson(manifest.catalogs.orEmpty())
 
         val entity = AddonEntity(
             transportUrl = transportUrl, id = manifest.id, name = manifest.name, version = manifest.version,
@@ -329,7 +333,7 @@ class AddonRepository @Inject constructor(
         )
         dao.insertAddon(entity)
 
-        val newConfigs = manifest.catalogs.map { catalog ->
+        val newConfigs = manifest.catalogs.orEmpty().map { catalog ->
             val uniqueId = "${transportUrl}/${catalog.type}/${catalog.id}"
             val isMovieCat = catalog.type == "movie"
             val isSeriesCat = catalog.type == "series"
