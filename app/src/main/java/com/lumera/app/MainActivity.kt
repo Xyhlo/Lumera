@@ -350,6 +350,109 @@ private fun UpdateAvailableDialog(
     }
 }
 
+@Composable
+private fun UpdateDownloadingDialog(progress: Float, downloadedMb: Float, totalMb: Float) {
+    Dialog(onDismissRequest = {}) {
+        Box(
+            modifier = Modifier
+                .width(480.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.background)
+                .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                .padding(24.dp)
+        ) {
+            androidx.compose.foundation.layout.Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Downloading Update",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(24.dp))
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.White.copy(0.1f),
+                    drawStopIndicator = {}
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    if (totalMb > 0f) "%.1f MB / %.1f MB".format(downloadedMb, totalMb)
+                    else "${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateErrorDialog(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .width(480.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.background)
+                .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                .padding(24.dp)
+        ) {
+            androidx.compose.foundation.layout.Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Update Failed",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    VoidButton(
+                        text = "Dismiss",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
+                    VoidButton(
+                        text = "Retry",
+                        onClick = onRetry,
+                        isPrimary = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun buildSourcePayload(
     streams: List<Stream>,
     selectedStream: Stream
@@ -1738,21 +1841,44 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Update available dialog (auto-shown after splash)
-                    if (_splashFinished.value && !updateDismissed && appUpdateManager.isPopupEnabled && updateState is UpdateState.UpdateAvailable) {
-                        val info = (updateState as UpdateState.UpdateAvailable).info
-                        UpdateAvailableDialog(
-                            info = info,
-                            onUpdate = {
-                                updateDismissed = true
-                                updateScope.launch { appUpdateManager.downloadAndInstall(info.apkUrl) }
-                            },
-                            onDismiss = { updateDismissed = true },
-                            onDontShowAgain = {
-                                appUpdateManager.setPopupEnabled(false)
-                                updateDismissed = true
+                    // Update dialogs (auto-shown after splash)
+                    if (_splashFinished.value && !updateDismissed && appUpdateManager.isPopupEnabled) {
+                        when (val state = updateState) {
+                            is UpdateState.UpdateAvailable -> {
+                                UpdateAvailableDialog(
+                                    info = state.info,
+                                    onUpdate = {
+                                        updateScope.launch { appUpdateManager.downloadAndInstall(state.info.apkUrl) }
+                                    },
+                                    onDismiss = { updateDismissed = true },
+                                    onDontShowAgain = {
+                                        appUpdateManager.setPopupEnabled(false)
+                                        updateDismissed = true
+                                    }
+                                )
                             }
-                        )
+                            is UpdateState.Downloading -> {
+                                UpdateDownloadingDialog(
+                                    progress = state.progress,
+                                    downloadedMb = state.downloadedMb,
+                                    totalMb = state.totalMb
+                                )
+                            }
+                            is UpdateState.Error -> {
+                                UpdateErrorDialog(
+                                    message = state.message,
+                                    onRetry = {
+                                        appUpdateManager.resetState()
+                                        updateScope.launch { appUpdateManager.checkForUpdate() }
+                                    },
+                                    onDismiss = {
+                                        appUpdateManager.resetState()
+                                        updateDismissed = true
+                                    }
+                                )
+                            }
+                            else -> {}
+                        }
                     }
 
                 }

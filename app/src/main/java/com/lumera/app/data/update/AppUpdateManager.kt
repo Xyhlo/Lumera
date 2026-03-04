@@ -30,7 +30,7 @@ sealed class UpdateState {
     data object Checking : UpdateState()
     data class UpdateAvailable(val info: UpdateInfo) : UpdateState()
     data object UpToDate : UpdateState()
-    data class Downloading(val progress: Float) : UpdateState()
+    data class Downloading(val progress: Float, val downloadedMb: Float = 0f, val totalMb: Float = 0f) : UpdateState()
     data class ReadyToInstall(val file: File) : UpdateState()
     data class Error(val message: String) : UpdateState()
 }
@@ -163,7 +163,11 @@ class AppUpdateManager @Inject constructor(
                     digest.update(buffer, 0, bytesRead)
                     downloadedBytes += bytesRead
                     if (totalBytes > 0) {
-                        _state.value = UpdateState.Downloading(downloadedBytes.toFloat() / totalBytes)
+                        _state.value = UpdateState.Downloading(
+                            progress = downloadedBytes.toFloat() / totalBytes,
+                            downloadedMb = downloadedBytes / (1024f * 1024f),
+                            totalMb = totalBytes / (1024f * 1024f)
+                        )
                     }
                 }
             }
