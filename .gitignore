@@ -48,6 +48,9 @@ Desktop.ini
 # Log files
 *.log
 
+# Cloudflare Wrangler cache
+.wrangler/
+
 # Orphaned files (not part of source)
 demo.mp4
 screen.png

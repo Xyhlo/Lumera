@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,6 +10,14 @@ plugins {
     id("com.google.dagger.hilt.android")
 
 }
+
+// Read ACRA config from local.properties (keeps secrets out of version control)
+val localProperties = Properties().apply {
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) load(localPropsFile.inputStream())
+}
+val acraUrl: String = localProperties.getProperty("acra.url", "")
+val acraToken: String = localProperties.getProperty("acra.token", "")
 
 android {
     namespace = "com.lumera.app"
@@ -23,6 +33,10 @@ android {
         // GitHub repository for auto-update system
         buildConfigField("String", "GITHUB_OWNER", "\"LumeraD3v\"")
         buildConfigField("String", "GITHUB_REPO", "\"Lumera\"")
+
+        // ACRA crash reporting (loaded from local.properties)
+        buildConfigField("String", "ACRA_URL", "\"$acraUrl\"")
+        buildConfigField("String", "ACRA_TOKEN", "\"$acraToken\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -142,5 +156,9 @@ dependencies {
 
     // --- ENCRYPTED SHARED PREFERENCES ---
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // --- CRASH REPORTING (ACRA) ---
+    implementation("ch.acra:acra-http:5.11.4")
+    implementation("ch.acra:acra-toast:5.11.4")
 
 }

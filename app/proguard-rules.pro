@@ -68,6 +68,10 @@
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
 
+# ─── ACRA (Crash Reporting) ───
+-keep class org.acra.** { *; }
+-dontwarn org.acra.**
+
 # ─── General ───
 -dontwarn javax.annotation.**
 -dontwarn kotlin.reflect.jvm.internal.**
