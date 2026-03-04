@@ -1282,7 +1282,6 @@ fun AboutSettings(
             )
         }
 
-
         // UPDATE AVAILABLE SECTION
         if (updateState is UpdateState.UpdateAvailable) {
             val info = (updateState as UpdateState.UpdateAvailable).info
