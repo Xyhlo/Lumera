@@ -82,11 +82,11 @@ import com.lumera.app.ui.theme.LocalHubRoundCorners
 import com.lumera.app.ui.theme.LumeraTheme
 import com.lumera.app.ui.theme.ThemeManager
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import android.media.MediaPlayer
 import com.lumera.app.data.profile.ProfileConfigurationManager
 
@@ -680,7 +680,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        runBlocking(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             profileConfigurationManager.saveActiveRuntimeState()
         }
     }
@@ -789,6 +789,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fix sideload launch bug: pressing Home and returning re-creates the activity
+        // instead of resuming it when the APK was installed via adb/sideload.
+        if (!isTaskRoot && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+            && Intent.ACTION_MAIN == intent.action) {
+            finish()
+            return
+        }
 
         val showSplash = savedInstanceState?.getBoolean(KEY_SPLASH_SHOWN) != true
         if (!showSplash) _splashFinished.value = true

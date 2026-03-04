@@ -245,9 +245,13 @@ class ProfileConfigurationManager @Inject constructor(
         return prefs.getStringSet(KEY_PENDING_SETUP_PROFILES, emptySet()) ?: emptySet()
     }
 
-    private fun getLastActiveProfileId(): Int? {
+    fun getLastActiveProfileId(): Int? {
         val value = prefs.getInt(KEY_LAST_ACTIVE_PROFILE_ID, -1)
         return if (value == -1) null else value
+    }
+
+    fun clearLastActiveProfileId() {
+        prefs.edit().remove(KEY_LAST_ACTIVE_PROFILE_ID).apply()
     }
 
     private fun setLastActiveProfileId(profileId: Int) {

@@ -49,6 +49,7 @@ class MainViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             activeProfileId?.let { profileConfigurationManager.saveRuntimeState(it) }
+            profileConfigurationManager.clearLastActiveProfileId()
             activeProfileId = null
             profileJob?.cancel()
             _activeProfile.value = null
