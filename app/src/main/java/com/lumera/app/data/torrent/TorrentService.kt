@@ -75,6 +75,8 @@ class TorrentService : Service() {
 
     private fun startDownload(magnet: String, fileIdx: Int) {
         downloadJob?.cancel()
+        stopProxy()
+        cleanupDownloads()
         downloadJob = scope.launch {
             if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
 
@@ -158,18 +160,25 @@ class TorrentService : Service() {
                     largestIdx
                 }
 
+                // Select only the target file, ignore all others
                 val priorities = Array(numFiles) { Priority.IGNORE }
-                priorities[targetFileIndex] = Priority.TOP_PRIORITY
+                priorities[targetFileIndex] = Priority.DEFAULT
                 handle.prioritizeFiles(priorities)
 
-                // Phase 4: Create stream mapping and prioritize first/last pieces
+                // Phase 4: Create stream mapping and set on-demand piece priorities
                 val torrentStream = TorrentStream.create(handle, torrentInfo, targetFileIndex)
                 val movieFile = File(saveDir, fileStorage.filePath(targetFileIndex))
 
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
                     "(${torrentStream.fileSize / 1024 / 1024} MB, ${torrentStream.numPieces} pieces)")
 
-                // Prioritize first/last 1% of pieces for container headers (moov atom, EBML, etc.)
+                // Set ALL pieces to IGNORE — only download what the player actually requests.
+                // This prevents libtorrent from downloading the entire file (critical for large files on limited storage).
+                for (i in torrentStream.firstPiece..torrentStream.lastPiece) {
+                    handle.piecePriority(i, Priority.IGNORE)
+                }
+
+                // Prioritize first/last 1% of pieces for container headers (moov atom, EBML, MKV cues, etc.)
                 val headCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
                 val tailCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
 
@@ -187,8 +196,8 @@ class TorrentService : Service() {
                 }
 
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
-                    "Prioritized pieces: first $headCount [${torrentStream.firstPiece}..], " +
-                    "last $tailCount [..${torrentStream.lastPiece}]")
+                    "On-demand mode: ${torrentStream.numPieces} pieces set to IGNORE, " +
+                    "prioritized first $headCount + last $tailCount for headers")
 
                 // Phase 5: Wait for first piece before starting proxy
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for first piece (${torrentStream.firstPiece})...")
@@ -264,10 +273,23 @@ class TorrentService : Service() {
         stopProxy()
         downloadJob?.cancel()
         try { engine.stop() } catch (_: Exception) {}
+        cleanupDownloads()
         job.cancel()
         onStreamReady = null
         onStreamError = null
         super.onDestroy()
+    }
+
+    private fun cleanupDownloads() {
+        try {
+            val downloadDir = engine.getDownloadPath(this)
+            if (downloadDir.exists()) {
+                downloadDir.deleteRecursively()
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Cleaned up downloads: ${downloadDir.absolutePath}")
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Failed to cleanup downloads", e)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
