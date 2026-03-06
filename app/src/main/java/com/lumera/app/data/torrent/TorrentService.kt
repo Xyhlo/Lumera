@@ -12,7 +12,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lumera.app.BuildConfig
 import org.libtorrent4j.Priority
-import org.libtorrent4j.TorrentInfo
+import org.libtorrent4j.swig.libtorrent
+import org.libtorrent4j.swig.error_code
+import org.libtorrent4j.swig.torrent_flags_t
 
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -154,44 +156,38 @@ class TorrentService : Service() {
                     if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
                 }
 
-                // Use fetchMagnet — the dedicated API for resolving magnet metadata
-                // This runs on Dispatchers.IO so blocking is OK
+                // Add magnet directly — keeps peer connections alive for faster piece downloads.
+                // Unlike fetchMagnet() which adds a temp torrent, fetches metadata, then removes it,
+                // this adds the torrent once and waits for metadata in-place.
                 progressStatus = "Fetching metadata..."
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (30s timeout)...")
-                val torrentData = session.fetchMagnet(magnet, 30, saveDir)
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet directly (30s timeout)...")
 
-                if (torrentData == null) {
-                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
+                // Parse magnet to extract info hash for handle lookup
+                val ec = error_code()
+                val params = libtorrent.parse_magnet_uri(magnet, ec)
+                if (ec.value() != 0) {
+                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Invalid magnet URI: ${ec.message()}")
                     withContext(Dispatchers.Main) {
-                        onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
+                        onStreamError?.invoke("Invalid magnet link.")
                     }
                     stopSelf()
                     return@launch
                 }
+                val infoHash = org.libtorrent4j.Sha1Hash(params.getInfo_hashes().get_best())
 
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
-                progressStatus = "Preparing stream..."
+                session.download(magnet, saveDir, torrent_flags_t())
 
-                // Check cancellation before adding torrent — fetchMagnet is a native blocking
-                // call that can't be cancelled, so a cancelled coroutine may reach here
-                ensureActive()
-
-                // Add the torrent for downloading using the resolved metadata
-                val torrentInfo = TorrentInfo(torrentData)
-                session.download(torrentInfo, saveDir)
-
-                // Get the handle
+                // Find the handle (should be available almost immediately after download() call)
                 var handle: org.libtorrent4j.TorrentHandle? = null
                 var attempts = 0
                 while (handle == null && attempts < 200) {
-                    handle = session.find(torrentInfo.infoHash())
+                    handle = session.find(infoHash)
                     if (handle == null) delay(50)
                     attempts++
                 }
 
                 if (handle == null) {
-                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Failed to get handle after metadata.")
+                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Failed to get handle after adding magnet.")
                     withContext(Dispatchers.Main) {
                         onStreamError?.invoke("Torrent not found. Check your connection.")
                     }
@@ -200,6 +196,26 @@ class TorrentService : Service() {
                 }
 
                 currentHandle = handle
+
+                // Wait for metadata — peers are already connected and downloading it
+                val metadataDeadline = System.currentTimeMillis() + 30_000L
+                while (!handle.status().hasMetadata()) {
+                    ensureActive()
+                    if (System.currentTimeMillis() >= metadataDeadline) {
+                        if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Timeout waiting for metadata")
+                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
+                        withContext(Dispatchers.Main) {
+                            onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
+                        }
+                        stopSelf()
+                        return@launch
+                    }
+                    delay(100)
+                }
+
+                val torrentInfo = handle.torrentFile()
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! Peers already connected.")
+                progressStatus = "Preparing stream..."
 
                 // Phase 3: Select file and set priorities
                 val numFiles = torrentInfo.numFiles()

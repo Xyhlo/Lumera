@@ -62,7 +62,10 @@ class TorrentEngine @Inject constructor(
                 "router.bittorrent.com:6881," +
                 "router.utorrent.com:6881," +
                 "dht.transmissionbt.com:6881," +
-                "dht.aelitis.com:6881"
+                "dht.aelitis.com:6881," +
+                "dht.libtorrent.org:25401," +
+                "router.nuh.dev:6881," +
+                "dht.bitcoin.sprovoost.nl:6881"
             )
             connectionsLimit(200)
             activeDownloads(1)

@@ -190,7 +190,13 @@ private fun resolvePlayableSourceUrl(stream: Stream): String? {
     if (directUrl != null) return directUrl
 
     val infoHash = stream.infoHash?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    val trackerParams = TORRENT_TRACKERS.joinToString("") {
+    // Combine hardcoded trackers with addon-provided tracker URLs
+    val addonTrackers = stream.sources
+        ?.filter { it.startsWith("tracker:") }
+        ?.map { it.removePrefix("tracker:") }
+        ?: emptyList()
+    val allTrackers = (addonTrackers + TORRENT_TRACKERS).distinct()
+    val trackerParams = allTrackers.joinToString("") {
         "&tr=${java.net.URLEncoder.encode(it, "UTF-8")}"
     }
     return "magnet:?xt=urn:btih:${infoHash}&dn=Video${trackerParams}"
