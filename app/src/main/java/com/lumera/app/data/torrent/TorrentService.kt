@@ -274,6 +274,7 @@ class TorrentService : Service() {
         stopProxy()
         downloadJob?.cancel()
         removeCurrentTorrent()
+        engine.saveState()
         cleanupDownloads()
         job.cancel()
         onStreamReady = null

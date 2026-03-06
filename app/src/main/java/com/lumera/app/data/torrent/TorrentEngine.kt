@@ -20,6 +20,7 @@ class TorrentEngine @Inject constructor(
 
     private val session = SessionManager()
     private var isStarted = false
+    private val stateFile = File(context.filesDir, "session_state.dat")
 
     init {
         // Pre-warm: start the session immediately so DHT bootstraps in the background
@@ -60,8 +61,26 @@ class TorrentEngine @Inject constructor(
             activeDownloads(1)
             activeSeeds(1)
         }
-        val params = SessionParams(settings)
+
+        // Try restoring saved session state (DHT routing table) for faster bootstrap
+        val params = try {
+            if (stateFile.exists()) {
+                val saved = stateFile.readBytes()
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Restoring session state (${saved.size} bytes)")
+                SessionParams(saved)
+            } else {
+                SessionParams(settings)
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Failed to restore session state, starting fresh", e)
+            stateFile.delete()
+            SessionParams(settings)
+        }
+
         session.start(params)
+
+        // Always apply our settings on top — ensures current config even when restoring old state
+        session.applySettings(settings)
 
         if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Endpoints after start: ${session.listenEndpoints()}")
 
@@ -81,6 +100,17 @@ class TorrentEngine @Inject constructor(
         return isStarted && session.isDhtRunning() &&
                 session.listenEndpoints().isNotEmpty() &&
                 session.stats().dhtNodes() > 0
+    }
+
+    fun saveState() {
+        if (!isStarted) return
+        try {
+            val state = session.saveState()
+            stateFile.writeBytes(state)
+            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Saved session state (${state.size} bytes, dhtNodes=${session.stats().dhtNodes()})")
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Failed to save session state", e)
+        }
     }
 
     fun getDownloadPath(): File {
