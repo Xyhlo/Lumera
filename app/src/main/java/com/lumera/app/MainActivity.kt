@@ -41,6 +41,7 @@ import com.lumera.app.data.update.AppUpdateManager
 import com.lumera.app.data.update.UpdateInfo
 import com.lumera.app.data.update.UpdateState
 import com.lumera.app.data.player.PlaybackTrackSelectionStore
+import com.lumera.app.data.torrent.TorrentProgress
 import com.lumera.app.data.torrent.TorrentService
 import com.lumera.app.data.player.SourceSelectionStore
 import com.lumera.app.ui.MainViewModel
@@ -828,6 +829,7 @@ class MainActivity : ComponentActivity() {
             var selectedMovieId by rememberSaveable { mutableStateOf("") }
             var selectedMovieType by rememberSaveable { mutableStateOf("movie") }
             var selectedVideoUrl by rememberSaveable { mutableStateOf("") }
+            var torrentProgress by remember { mutableStateOf<TorrentProgress?>(null) }
             var selectedMovieTitle by rememberSaveable { mutableStateOf("") }
             var selectedMoviePoster by rememberSaveable { mutableStateOf("") }
             var selectedMovieLogo by rememberSaveable { mutableStateOf("") }
@@ -1352,12 +1354,19 @@ class MainActivity : ComponentActivity() {
                                             selectedPlaybackPoster = selectedMoviePoster
                                             playerState.selectedPlayerSubtitles = subtitlePayload
                                             playerState.selectedPlayerSources = sourcePayload
+                                            selectedVideoUrl = ""
+                                            torrentProgress = TorrentProgress("Connecting to peers...")
+                                            activeView = "player"
                                             TorrentService.onStreamReady = { localUrl ->
+                                                torrentProgress = null
                                                 selectedVideoUrl = localUrl
-                                                activeView = "player"
                                             }
                                             TorrentService.onStreamError = { error ->
+                                                torrentProgress = null
                                                 if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                            }
+                                            TorrentService.onStreamProgress = { progress ->
+                                                torrentProgress = progress
                                             }
                                             val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                 putExtra("MAGNET_LINK", url)
@@ -1386,7 +1395,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         } else if (view == "player") {
-                            if (selectedVideoUrl.isBlank()) {
+                            if (selectedVideoUrl.isBlank() && torrentProgress == null) {
                                 LaunchedEffect(Unit) { activeView = "details" }
                             } else {
                             val rememberedTrackSelection = remember(selectedPlaybackId) {
@@ -1865,11 +1874,17 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onEpisodeSwitchDismissed = { playerState.pendingEpisodeSwitch = null; playerState.isEpisodeSwitchLoading = false },
                                 onMagnetSourceSelected = { magnetUrl, onReady ->
+                                    torrentProgress = TorrentProgress("Connecting to peers...")
                                     TorrentService.onStreamReady = { localUrl ->
+                                        torrentProgress = null
                                         onReady(localUrl)
                                     }
                                     TorrentService.onStreamError = { error ->
+                                        torrentProgress = null
                                         if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Source switch error: $error")
+                                    }
+                                    TorrentService.onStreamProgress = { progress ->
+                                        torrentProgress = progress
                                     }
                                     val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                         putExtra("MAGNET_LINK", magnetUrl)
@@ -1877,7 +1892,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                     startService(intent)
                                 },
+                                torrentProgress = torrentProgress,
                                 onBack = { sessionResult ->
+                                    torrentProgress = null
                                     handlePlayerSessionEnd(
                                         sessionResult = sessionResult,
                                         selectedPlaybackId = selectedPlaybackId,

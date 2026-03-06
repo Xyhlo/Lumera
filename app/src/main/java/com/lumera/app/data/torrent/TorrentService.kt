@@ -33,6 +33,7 @@ class TorrentService : Service() {
     companion object {
         var onStreamReady: ((String) -> Unit)? = null
         var onStreamError: ((String) -> Unit)? = null
+        var onStreamProgress: ((TorrentProgress) -> Unit)? = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -86,6 +87,29 @@ class TorrentService : Service() {
         }
     }
 
+    @Volatile
+    private var progressStatus = "Connecting to peers..."
+
+    private fun emitProgress(session: org.libtorrent4j.SessionManager) {
+        val handle = currentHandle
+        val progress = if (handle != null) {
+            try {
+                val status = handle.status()
+                TorrentProgress(
+                    status = progressStatus,
+                    downloadSpeed = status.downloadRate().toLong(),
+                    peers = status.numPeers(),
+                    seeds = status.numSeeds()
+                )
+            } catch (_: Exception) {
+                TorrentProgress(status = progressStatus)
+            }
+        } else {
+            TorrentProgress(status = progressStatus)
+        }
+        onStreamProgress?.invoke(progress)
+    }
+
     private fun startDownload(magnet: String, fileIdx: Int) {
         downloadJob?.cancel()
         stopProxy()
@@ -95,8 +119,16 @@ class TorrentService : Service() {
         downloadJob = scope.launch {
             if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
 
+            // Launch stats reporter that polls every second until cancelled
+            val session = engine.getSession()
+            val progressJob = launch {
+                while (isActive) {
+                    withContext(Dispatchers.Main) { emitProgress(session) }
+                    delay(1000)
+                }
+            }
+
             try {
-                val session = engine.getSession()
                 val saveDir = engine.getDownloadPath()
 
                 // Diagnostics: check session state
@@ -124,6 +156,7 @@ class TorrentService : Service() {
 
                 // Use fetchMagnet — the dedicated API for resolving magnet metadata
                 // This runs on Dispatchers.IO so blocking is OK
+                progressStatus = "Fetching metadata..."
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (30s timeout)...")
                 val torrentData = session.fetchMagnet(magnet, 30, saveDir)
 
@@ -138,6 +171,7 @@ class TorrentService : Service() {
                 }
 
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
+                progressStatus = "Preparing stream..."
 
                 // Check cancellation before adding torrent — fetchMagnet is a native blocking
                 // call that can't be cancelled, so a cancelled coroutine may reach here
@@ -235,13 +269,16 @@ class TorrentService : Service() {
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Stream ready at: $localUrl")
                 updateNotification("Streaming...")
 
+                progressJob.cancel()
                 withContext(Dispatchers.Main) {
                     onStreamReady?.invoke(localUrl)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
+                progressJob.cancel()
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
                 throw e // Don't call stopSelf — a new download is taking over
             } catch (e: Exception) {
+                progressJob.cancel()
                 if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     onStreamError?.invoke("Torrent error: ${e.message}")
@@ -279,6 +316,7 @@ class TorrentService : Service() {
         job.cancel()
         onStreamReady = null
         onStreamError = null
+        onStreamProgress = null
         super.onDestroy()
     }
 

@@ -93,6 +93,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
+import com.lumera.app.data.torrent.TorrentProgress
 import com.lumera.app.ui.details.GlassSidebar
 import com.lumera.app.ui.details.GlassSidebarScaffold
 import com.lumera.app.ui.details.SidebarState
@@ -169,6 +170,7 @@ fun BasePlayerScaffold(
     episodeSwitchTitle: String? = null,
     onEpisodeSwitchSourceSelected: ((sourceUrl: String) -> Unit)? = null,
     onEpisodeSwitchDismissed: (() -> Unit)? = null,
+    torrentProgress: TorrentProgress? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by playbackController.uiState.collectAsState()
@@ -647,7 +649,7 @@ fun BasePlayerScaffold(
             enter = fadeIn(animationSpec = tween(150)),
             exit = fadeOut(animationSpec = tween(120))
         ) {
-            LoadingOverlay()
+            LoadingOverlay(torrentProgress = torrentProgress)
         }
 
         AnimatedVisibility(
@@ -1626,16 +1628,52 @@ private fun PlayerStatusPill(
 }
 
 @Composable
-private fun LoadingOverlay() {
+private fun LoadingOverlay(torrentProgress: TorrentProgress? = null) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.22f)),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
+            if (torrentProgress != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = torrentProgress.status,
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (torrentProgress.peers > 0 || torrentProgress.downloadSpeed > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val parts = mutableListOf<String>()
+                    if (torrentProgress.downloadSpeed > 0) {
+                        parts.add(formatSpeed(torrentProgress.downloadSpeed))
+                    }
+                    if (torrentProgress.peers > 0) {
+                        parts.add("${torrentProgress.peers} peers")
+                    }
+                    if (torrentProgress.seeds > 0) {
+                        parts.add("${torrentProgress.seeds} seeds")
+                    }
+                    Text(
+                        text = parts.joinToString("  \u2022  "),
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatSpeed(bytesPerSec: Long): String {
+    return when {
+        bytesPerSec >= 1_048_576 -> "${"%.1f".format(bytesPerSec / 1_048_576.0)} MB/s"
+        bytesPerSec >= 1_024 -> "${"%.0f".format(bytesPerSec / 1_024.0)} KB/s"
+        else -> "$bytesPerSec B/s"
     }
 }
 

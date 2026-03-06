@@ -27,6 +27,7 @@ import com.lumera.app.ui.player.base.PlayerSourceOption
 import com.lumera.app.ui.player.base.PlayerSubtitleSource
 import com.lumera.app.ui.player.base.SkipSegmentInfo
 import com.lumera.app.data.model.stremio.MetaVideo
+import com.lumera.app.data.torrent.TorrentProgress
 
 data class PlayerSessionResult(
     val positionMs: Long,
@@ -71,6 +72,7 @@ fun PlayerScreen(
     onEpisodeSwitchSourceSelected: ((sourceUrl: String) -> Unit)? = null,
     onEpisodeSwitchDismissed: (() -> Unit)? = null,
     onMagnetSourceSelected: ((magnetUrl: String, onReady: (localUrl: String) -> Unit) -> Unit)? = null,
+    torrentProgress: TorrentProgress? = null,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -142,6 +144,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(movieId, videoUrl, backendType) {
+        if (videoUrl.isBlank()) return@LaunchedEffect // Wait for torrent stream URL
         val resumePosition = viewModel.getResumePosition(movieId)
         playbackController.load(
             PlayerLoadRequest(
@@ -232,7 +235,8 @@ fun PlayerScreen(
             isEpisodeSwitchLoading = isEpisodeSwitchLoading,
             episodeSwitchTitle = episodeSwitchTitle,
             onEpisodeSwitchSourceSelected = onEpisodeSwitchSourceSelected,
-            onEpisodeSwitchDismissed = onEpisodeSwitchDismissed
+            onEpisodeSwitchDismissed = onEpisodeSwitchDismissed,
+            torrentProgress = torrentProgress
         )
     }
 }
