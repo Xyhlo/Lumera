@@ -11,6 +11,7 @@ import java.io.RandomAccessFile
 /**
  * Blocking InputStream that reads torrent file data from disk,
  * but only after verifying each piece is downloaded via havePiece().
+ * Reads are clamped to piece boundaries to prevent reading undownloaded data.
  * Sets piece priorities and deadlines to keep download ahead of playback.
  */
 class TorrentInputStream(
@@ -28,7 +29,7 @@ class TorrentInputStream(
         private const val TAG = "LumeraTorrent"
         private const val PIECE_WAIT_POLL_MS = 200L
         private const val PIECE_WAIT_TIMEOUT_MS = 90_000L
-        private const val LOOKAHEAD = 5
+        private const val LOOKAHEAD = 15
         private const val DEADLINE_MS = 1000
     }
 
@@ -49,7 +50,13 @@ class TorrentInputStream(
 
     override fun read(b: ByteArray, off: Int, len: Int): Int {
         if (remaining <= 0) return -1
-        val toRead = len.toLong().coerceAtMost(remaining).toInt()
+
+        // Clamp read to current piece boundary to avoid reading from an undownloaded piece
+        val pieceIndex = stream.pieceIndexForOffset(position)
+        val nextPieceStart = ((pieceIndex + 1).toLong() * stream.pieceLength) - stream.fileOffset
+        val maxInPiece = (nextPieceStart - position).coerceAtLeast(1)
+        val toRead = len.toLong().coerceAtMost(remaining).coerceAtMost(maxInPiece).toInt()
+
         waitForPiece(position)
         val bytesRead = raf.read(b, off, toRead)
         if (bytesRead > 0) {

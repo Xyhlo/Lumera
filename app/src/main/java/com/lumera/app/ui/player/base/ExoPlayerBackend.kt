@@ -131,6 +131,7 @@ class ExoPlayerBackend(
     private var pendingHintTrackRefresh: Boolean = false
     private var hintTrackRefreshJob: Job? = null
     private var pendingStartPositionMs: Long = 0L
+    private var isTorrentStream: Boolean = false
     private var cachedIsTvDevice: Boolean? = null
     private val sharedExtractorsFactory by lazy { createExtractorsFactory() }
     private val subtitleFormatHintsByTrackId = mutableMapOf<String, String>()
@@ -179,7 +180,10 @@ class ExoPlayerBackend(
                 if (pendingSeekMs > 0L) {
                     pendingStartPositionMs = 0L
                     exoPlayer?.let { p ->
-                        p.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                        p.setSeekParameters(
+                            if (isTorrentStream) SeekParameters.NEXT_SYNC
+                            else SeekParameters.CLOSEST_SYNC
+                        )
                         p.seekTo(pendingSeekMs)
                     }
                 }
@@ -407,8 +411,10 @@ class ExoPlayerBackend(
         if (released) return
         pendingStartPositionMs = 0L
         val player = exoPlayer ?: return
-        // Keep seek behavior aligned with the old Java player scrub path.
-        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+        player.setSeekParameters(
+            if (isTorrentStream) SeekParameters.NEXT_SYNC
+            else SeekParameters.CLOSEST_SYNC
+        )
         player.seekTo(positionMs.coerceAtLeast(0L))
         updateProgressState()
     }
@@ -855,6 +861,7 @@ class ExoPlayerBackend(
 
         val userInfo = sourceUri.userInfo
         val isLocalhost = sourceUri.host == "127.0.0.1" || sourceUri.host == "localhost"
+        isTorrentStream = isLocalhost
         val okHttpFactory = OkHttpDataSource.Factory(getOrCreateOkHttpClient(isLocalhost))
             .setUserAgent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +

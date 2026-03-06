@@ -77,6 +77,12 @@ class TorrentEngine @Inject constructor(
         return session
     }
 
+    fun isDhtWarmed(): Boolean {
+        return isStarted && session.isDhtRunning() &&
+                session.listenEndpoints().isNotEmpty() &&
+                session.stats().dhtNodes() > 0
+    }
+
     fun getDownloadPath(): File {
         return File(context.getExternalFilesDir(null), "downloads")
     }

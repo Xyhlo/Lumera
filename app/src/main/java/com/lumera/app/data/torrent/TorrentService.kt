@@ -88,20 +88,24 @@ class TorrentService : Service() {
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
 
-                // Wait for session to fully initialize (listeners + DHT)
-                var dhtWait = 0
-                while (dhtWait < 5) {
-                    delay(1000)
-                    dhtWait++
-                    val endpoints = session.listenEndpoints()
-                    val dhtRunning = session.isDhtRunning()
-                    val dhtNodes = session.stats().dhtNodes()
-                    if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
-                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
+                // Skip DHT wait if engine was pre-warmed and DHT is already bootstrapped
+                if (engine.isDhtWarmed()) {
+                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "DHT already warmed, skipping init wait (nodes=${session.stats().dhtNodes()})")
+                } else {
+                    var dhtWait = 0
+                    while (dhtWait < 5) {
+                        delay(1000)
+                        dhtWait++
+                        val endpoints = session.listenEndpoints()
+                        val dhtRunning = session.isDhtRunning()
+                        val dhtNodes = session.stats().dhtNodes()
+                        if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
+                            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
+                        }
+                        if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
                     }
-                    if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
+                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
                 }
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
 
                 // Use fetchMagnet — the dedicated API for resolving magnet metadata
                 // This runs on Dispatchers.IO so blocking is OK
