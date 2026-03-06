@@ -4,20 +4,14 @@ import android.util.Log
 import com.lumera.app.BuildConfig
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
-import java.io.FileInputStream
-import java.io.RandomAccessFile
 
 class StreamProxy(
     private val file: File,
-    private val totalFileSize: Long = -1L
+    private val stream: TorrentStream
 ) : NanoHTTPD("127.0.0.1", 0) {
 
     override fun serve(session: IHTTPSession): Response {
-        if (!file.exists() || !file.canRead()) {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "File not found")
-        }
-
-        val fileLength = if (totalFileSize > 0) totalFileSize else file.length()
+        val fileLength = stream.fileSize
         val mimeType = inferMimeType(file.name)
         val rangeHeader = session.headers["range"]
 
@@ -33,25 +27,9 @@ class StreamProxy(
         }
     }
 
-    /**
-     * Wait until the file has grown to at least [needed] bytes.
-     * This is essential for torrent streaming — the player may request data
-     * (e.g. MP4 moov atom at the end) before the torrent has downloaded it.
-     * NanoHTTPD uses one thread per connection, so blocking here is safe.
-     * Returns true if data became available, false on timeout.
-     */
-    private fun waitForData(needed: Long, timeoutMs: Long = 90_000): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (file.length() < needed) {
-            if (System.currentTimeMillis() >= deadline) return false
-            try { Thread.sleep(500) } catch (_: InterruptedException) { return false }
-        }
-        return true
-    }
-
     private fun serveFullContent(fileLength: Long, mimeType: String): Response {
-        val fis = FileInputStream(file)
-        return newFixedLengthResponse(Response.Status.OK, mimeType, fis, fileLength).apply {
+        val tis = TorrentInputStream(file, stream)
+        return newFixedLengthResponse(Response.Status.OK, mimeType, tis, fileLength).apply {
             addHeader("Accept-Ranges", "bytes")
             addHeader("Content-Length", fileLength.toString())
         }
@@ -107,22 +85,8 @@ class StreamProxy(
             }
         }
 
-        // Wait for the torrent to download the requested region
-        val needed = end + 1
-        if (file.length() < needed) {
-            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Proxy waiting for data: need $needed bytes, have ${file.length()}")
-            if (!waitForData(needed)) {
-                if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Proxy timeout waiting for bytes $start-$end")
-                return newFixedLengthResponse(
-                    Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Data not yet available"
-                )
-            }
-        }
-
         val contentLength = end - start + 1
-        val raf = RandomAccessFile(file, "r")
-        raf.seek(start)
-        val rangeStream = BoundedInputStream(raf, contentLength)
+        val rangeStream = TorrentInputStream(file, stream, startOffset = start, length = contentLength)
 
         return newFixedLengthResponse(
             Response.Status.PARTIAL_CONTENT, mimeType, rangeStream, contentLength
@@ -142,31 +106,6 @@ class StreamProxy(
             lower.endsWith(".webm") -> "video/webm"
             lower.endsWith(".ts") -> "video/mp2t"
             else -> "video/mp4"
-        }
-    }
-
-    private class BoundedInputStream(
-        private val raf: RandomAccessFile,
-        private var remaining: Long
-    ) : java.io.InputStream() {
-
-        override fun read(): Int {
-            if (remaining <= 0) return -1
-            val b = raf.read()
-            if (b >= 0) remaining--
-            return b
-        }
-
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            if (remaining <= 0) return -1
-            val toRead = len.toLong().coerceAtMost(remaining).toInt()
-            val bytesRead = raf.read(b, off, toRead)
-            if (bytesRead > 0) remaining -= bytesRead
-            return bytesRead
-        }
-
-        override fun close() {
-            raf.close()
         }
     }
 }

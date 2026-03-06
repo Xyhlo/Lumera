@@ -12,7 +12,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lumera.app.BuildConfig
 import org.libtorrent4j.Priority
-import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentInfo
 
 import dagger.hilt.android.AndroidEntryPoint
@@ -163,48 +162,61 @@ class TorrentService : Service() {
                 priorities[targetFileIndex] = Priority.TOP_PRIORITY
                 handle.prioritizeFiles(priorities)
 
-                // Phase 4: Enable sequential download for streaming
-                handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
-
-                val targetFileSize = fileStorage.fileSize(targetFileIndex)
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
-                    "(${targetFileSize / 1024 / 1024} MB)")
-
-                // Phase 5: Wait for initial buffer
-                val minBytes = minOf(targetFileSize / 50, 2L * 1024 * 1024) // 2% or 2MB, whichever is smaller
+                // Phase 4: Create stream mapping and prioritize first/last pieces
+                val torrentStream = TorrentStream.create(handle, torrentInfo, targetFileIndex)
                 val movieFile = File(saveDir, fileStorage.filePath(targetFileIndex))
 
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for initial buffer (${minBytes / 1024} KB)...")
-                updateNotification("Buffering...")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
+                    "(${torrentStream.fileSize / 1024 / 1024} MB, ${torrentStream.numPieces} pieces)")
 
-                attempts = 0
-                val maxBufferWait = 120
-                while (attempts < maxBufferWait) {
-                    if (movieFile.exists() && movieFile.length() >= minBytes) {
-                        break
-                    }
-                    delay(1000)
-                    attempts++
+                // Prioritize first/last 1% of pieces for container headers (moov atom, EBML, etc.)
+                val headCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
+                val tailCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
 
-                    if (attempts % 10 == 0) {
-                        val status = handle.status()
-                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Buffer: ${(status.progress() * 100).toInt()}%, " +
-                            "peers: ${status.numPeers()}, dl: ${status.downloadRate() / 1024} KB/s")
+                for (i in 0 until headCount) {
+                    val idx = torrentStream.firstPiece + i
+                    handle.piecePriority(idx, Priority.TOP_PRIORITY)
+                    handle.setPieceDeadline(idx, 1000)
+                }
+                for (i in 0 until tailCount) {
+                    val idx = torrentStream.lastPiece - i
+                    if (idx > torrentStream.firstPiece + headCount - 1) {
+                        handle.piecePriority(idx, Priority.TOP_PRIORITY)
+                        handle.setPieceDeadline(idx, 1000)
                     }
                 }
 
-                if (!movieFile.exists() || movieFile.length() < minBytes) {
-                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Buffer timeout - not enough data received")
-                    withContext(Dispatchers.Main) {
-                        onStreamError?.invoke("Torrent has no seeders. Try a different source.")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
+                    "Prioritized pieces: first $headCount [${torrentStream.firstPiece}..], " +
+                    "last $tailCount [..${torrentStream.lastPiece}]")
+
+                // Phase 5: Wait for first piece before starting proxy
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for first piece (${torrentStream.firstPiece})...")
+                updateNotification("Buffering...")
+
+                var waitMs = 0
+                val maxWaitMs = 120_000
+                while (!handle.havePiece(torrentStream.firstPiece)) {
+                    delay(500)
+                    waitMs += 500
+                    if (waitMs >= maxWaitMs) {
+                        if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Timeout waiting for first piece")
+                        withContext(Dispatchers.Main) {
+                            onStreamError?.invoke("Torrent has no seeders. Try a different source.")
+                        }
+                        stopSelf()
+                        return@launch
                     }
-                    stopSelf()
-                    return@launch
+                    if (waitMs % 10_000 == 0) {
+                        val status = handle.status()
+                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
+                            "Waiting: peers=${status.numPeers()}, dl=${status.downloadRate() / 1024} KB/s")
+                    }
                 }
 
                 // Phase 6: Start proxy and signal ready
                 stopProxy()
-                val proxy = StreamProxy(movieFile, targetFileSize)
+                val proxy = StreamProxy(movieFile, torrentStream)
                 proxy.start()
                 streamProxy = proxy
 
