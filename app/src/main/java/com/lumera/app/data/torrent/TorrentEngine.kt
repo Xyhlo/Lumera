@@ -23,6 +23,13 @@ class TorrentEngine @Inject constructor(
     private val stateFile = File(context.filesDir, "session_state.dat")
 
     init {
+        // Clean up leftover torrent files from a previous crash (normal exits clean up in TorrentService.onDestroy)
+        val downloadDir = getDownloadPath()
+        if (downloadDir.exists()) {
+            downloadDir.deleteRecursively()
+            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Cleaned up stale downloads from previous crash")
+        }
+
         // Pre-warm: start the session immediately so DHT bootstraps in the background
         start()
     }
