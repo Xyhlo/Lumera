@@ -2,6 +2,7 @@ package com.lumera.app
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -837,7 +838,7 @@ class MainActivity : ComponentActivity() {
             var selectedPlaybackPoster by rememberSaveable { mutableStateOf("") }
             var previousView by rememberSaveable { mutableStateOf("menu") }
             val playerState = remember { PlayerState() }
-            var showTorrentUnsupportedDialog by remember { mutableStateOf(false) }
+
 
             LaunchedEffect(currentProfile?.id) {
                 val profileId = currentProfile?.id
@@ -1343,7 +1344,27 @@ class MainActivity : ComponentActivity() {
                                         candidateStreams = sourcePayloadInput
                                     )
                                     if (url.startsWith("magnet:")) {
-                                        showTorrentUnsupportedDialog = true
+                                        uiScope.launch {
+                                            mainViewModel.persistActiveProfileState()
+                                            selectedPlaybackId = playbackId
+                                            selectedPlaybackType = playbackType
+                                            selectedPlaybackTitle = resolvedPlaybackTitle
+                                            selectedPlaybackPoster = selectedMoviePoster
+                                            playerState.selectedPlayerSubtitles = subtitlePayload
+                                            playerState.selectedPlayerSources = sourcePayload
+                                            TorrentService.onStreamReady = { localUrl ->
+                                                selectedVideoUrl = localUrl
+                                                activeView = "player"
+                                            }
+                                            TorrentService.onStreamError = { error ->
+                                                if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                            }
+                                            val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                                putExtra("MAGNET_LINK", url)
+                                                putExtra("FILE_IDX", stream.fileIdx ?: -1)
+                                            }
+                                            startService(intent)
+                                        }
                                     } else {
                                         uiScope.launch {
                                             mainViewModel.persistActiveProfileState()
@@ -1583,7 +1604,22 @@ class MainActivity : ComponentActivity() {
                                             playerState.currentStream = streamToPlay
 
                                             if (nextUrl.startsWith("magnet:")) {
-                                                showTorrentUnsupportedDialog = true
+                                                selectedPlaybackId = nextPlaybackId
+                                                selectedPlaybackType = "series"
+                                                selectedPlaybackTitle = nextPlaybackTitle
+                                                playerState.selectedPlayerSubtitles = subtitlePayload
+                                                playerState.selectedPlayerSources = sourcePayload
+                                                TorrentService.onStreamReady = { localUrl ->
+                                                    selectedVideoUrl = localUrl
+                                                }
+                                                TorrentService.onStreamError = { error ->
+                                                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                                }
+                                                val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                                    putExtra("MAGNET_LINK", nextUrl)
+                                                    putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                                }
+                                                startService(intent)
                                             } else {
                                                 selectedPlaybackId = nextPlaybackId
                                                 selectedPlaybackType = "series"
@@ -1716,7 +1752,22 @@ class MainActivity : ComponentActivity() {
                                             playerState.currentStream = streamToPlay
 
                                             if (epUrl.startsWith("magnet:")) {
-                                                showTorrentUnsupportedDialog = true
+                                                selectedPlaybackId = epPlaybackId
+                                                selectedPlaybackType = "series"
+                                                selectedPlaybackTitle = epTitle
+                                                playerState.selectedPlayerSubtitles = subtitlePayload
+                                                playerState.selectedPlayerSources = sourcePayload
+                                                TorrentService.onStreamReady = { localUrl ->
+                                                    selectedVideoUrl = localUrl
+                                                }
+                                                TorrentService.onStreamError = { error ->
+                                                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                                }
+                                                val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                                    putExtra("MAGNET_LINK", epUrl)
+                                                    putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                                }
+                                                startService(intent)
                                             } else {
                                                 selectedPlaybackId = epPlaybackId
                                                 selectedPlaybackType = "series"
@@ -1782,7 +1833,22 @@ class MainActivity : ComponentActivity() {
                                         playerState.pendingEpisodeSwitch = null
 
                                         if (sourceUrl.startsWith("magnet:")) {
-                                            showTorrentUnsupportedDialog = true
+                                            selectedPlaybackId = pending.playbackId
+                                            selectedPlaybackType = "series"
+                                            selectedPlaybackTitle = pending.playbackTitle
+                                            playerState.selectedPlayerSubtitles = subtitlePayload
+                                            playerState.selectedPlayerSources = sourcePayload
+                                            TorrentService.onStreamReady = { localUrl ->
+                                                selectedVideoUrl = localUrl
+                                            }
+                                            TorrentService.onStreamError = { error ->
+                                                if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                            }
+                                            val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                                putExtra("MAGNET_LINK", sourceUrl)
+                                                putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                            }
+                                            startService(intent)
                                         } else {
                                             selectedPlaybackId = pending.playbackId
                                             selectedPlaybackType = "series"
@@ -1830,24 +1896,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Torrent unsupported dialog
-                    if (showTorrentUnsupportedDialog) {
-                        VoidDialog(
-                            onDismissRequest = { showTorrentUnsupportedDialog = false },
-                            title = "Torrents Not Supported"
-                        ) {
-                            Text(
-                                "Torrent streaming is not supported in this version.",
-                                color = Color.Gray
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            VoidButton(
-                                "Close",
-                                { showTorrentUnsupportedDialog = false },
-                                Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
 
                     // Update dialogs (auto-shown after splash)
                     if (_splashFinished.value && !updateDismissed && appUpdateManager.isPopupEnabled) {
