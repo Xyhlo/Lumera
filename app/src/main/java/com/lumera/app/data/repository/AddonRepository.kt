@@ -335,11 +335,21 @@ class AddonRepository @Inject constructor(
         val manifest = api.getManifest(url)
         val transportUrl = url.removeSuffix("/manifest.json")
         val catalogsJson = gson.toJson(manifest.catalogs.orEmpty())
+        val supportsMeta = manifest.resources?.any { element ->
+            when {
+                element.isJsonPrimitive -> element.asString == "meta"
+                element.isJsonObject -> element.asJsonObject.get("name")?.asString == "meta"
+                else -> false
+            }
+        } ?: false
 
         val entity = AddonEntity(
             transportUrl = transportUrl, id = manifest.id, name = manifest.name, version = manifest.version,
             description = manifest.description, iconUrl = manifest.logo, isTrusted = false, isEnabled = true,
-            nickname = null, catalogsJson = catalogsJson
+            nickname = null, catalogsJson = catalogsJson,
+            supportsMeta = supportsMeta,
+            typesJson = gson.toJson(manifest.types.orEmpty()),
+            idPrefixesJson = gson.toJson(manifest.idPrefixes.orEmpty())
         )
         dao.insertAddon(entity)
 
@@ -377,4 +387,41 @@ class AddonRepository @Inject constructor(
     suspend fun updateAddons(addons: List<AddonEntity>) = withContext(Dispatchers.IO) { dao.insertAddons(addons) }
 
     suspend fun getMetaDetails(url: String) = withContext(Dispatchers.IO) { api.getMeta(url).meta }
+
+    /**
+     * Resolves meta details by querying installed addons that support the meta resource
+     * for the given type/id, falling back to Cinemeta for standard types.
+     */
+    suspend fun resolveMetaDetails(type: String, id: String): MetaItem? = withContext(Dispatchers.IO) {
+        val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled && it.supportsMeta } ?: emptyList()
+
+        // Find addons whose declared types or idPrefixes match the request
+        val matchingAddons = addons.filter { addon ->
+            val types: List<String> = try {
+                gson.fromJson(addon.typesJson, Array<String>::class.java)?.toList() ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            val prefixes: List<String> = try {
+                gson.fromJson(addon.idPrefixesJson, Array<String>::class.java)?.toList() ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+
+            val typeMatches = types.contains(type)
+            val prefixMatches = prefixes.isEmpty() || prefixes.any { id.startsWith(it) }
+            typeMatches && prefixMatches
+        }
+
+        // Try matching addons first
+        for (addon in matchingAddons) {
+            try {
+                val url = "${addon.transportUrl}/meta/$type/$id.json"
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                if (meta != null) return@withContext meta
+            } catch (_: Exception) { /* try next */ }
+        }
+
+        // Fall back to Cinemeta for standard types
+        try {
+            val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
+            return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+        } catch (_: Exception) { null }
+    }
 }

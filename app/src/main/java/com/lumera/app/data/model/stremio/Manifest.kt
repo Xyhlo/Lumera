@@ -14,7 +14,8 @@ data class Manifest(
 
     val types: List<String>? = null,
     val catalogs: List<CatalogManifest>? = null,
-    val logo: String? = null
+    val logo: String? = null,
+    val idPrefixes: List<String>? = null
 )
 
 data class CatalogManifest(

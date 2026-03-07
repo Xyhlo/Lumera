@@ -88,8 +88,8 @@ class DetailsViewModel @Inject constructor(
 
         loadDetailsJob = viewModelScope.launch {
             try {
-                val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
-                val details = repository.getMetaDetails(url)
+                val details = repository.resolveMetaDetails(type, id)
+                    ?: throw Exception("No meta found")
                 if (requestVersion != loadRequestVersion) return@launch
                 loadedContentKey = requestKey
                 val resumePlaybackId = if (details.type == "series") {
