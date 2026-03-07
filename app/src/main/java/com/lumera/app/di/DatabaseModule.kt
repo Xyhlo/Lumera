@@ -29,6 +29,14 @@ private val MIGRATION_27_28 = object : Migration(27, 28) {
     }
 }
 
+private val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE addons ADD COLUMN supportsMeta INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE addons ADD COLUMN typesJson TEXT NOT NULL DEFAULT '[]'")
+        db.execSQL("ALTER TABLE addons ADD COLUMN idPrefixesJson TEXT NOT NULL DEFAULT '[]'")
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -48,7 +56,7 @@ object DatabaseModule {
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })
-            .addMigrations(MIGRATION_26_27, MIGRATION_27_28)
+            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29)
             .build()
     }
 

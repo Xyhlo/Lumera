@@ -18,5 +18,9 @@ data class AddonEntity(
 
     val catalogsJson: String = "[]",
 
+    val supportsMeta: Boolean = false,
+    val typesJson: String = "[]",
+    val idPrefixesJson: String = "[]",
+
     val sortOrder: Int = 999
 )
