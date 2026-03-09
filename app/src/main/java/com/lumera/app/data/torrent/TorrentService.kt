@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.StatFs
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lumera.app.BuildConfig
@@ -19,6 +20,7 @@ import org.libtorrent4j.swig.torrent_flags_t
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.io.File
+import java.io.FileOutputStream
 import java.net.URLEncoder
 import javax.inject.Inject
 
@@ -32,11 +34,16 @@ class TorrentService : Service() {
     private var streamProxy: StreamProxy? = null
     private var downloadJob: Job? = null
     private var currentHandle: org.libtorrent4j.TorrentHandle? = null
+    private var pieceCache: PieceCache? = null
 
     companion object {
         var onStreamReady: ((String) -> Unit)? = null
         var onStreamError: ((String) -> Unit)? = null
         var onStreamProgress: ((TorrentProgress) -> Unit)? = null
+        /** Minimum device free space before triggering disk cleanup (1 GB). */
+        private const val MIN_FREE_SPACE_BYTES = 1024L * 1024 * 1024
+        /** Check disk space every N progress ticks (1 tick = 1s, so 10 = every 10s). */
+        private const val CLEANUP_CHECK_INTERVAL = 10
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -118,6 +125,9 @@ class TorrentService : Service() {
         stopProxy()
         removeCurrentTorrent()
         cleanupDownloads()
+        pieceCache?.clear()
+        val cache = PieceCache()
+        pieceCache = cache
         engine.getDownloadPath().mkdirs()
         downloadJob = scope.launch {
             if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
@@ -125,8 +135,13 @@ class TorrentService : Service() {
             // Launch stats reporter that polls every second until cancelled
             val session = engine.getSession()
             val progressJob = launch {
+                var tick = 0
                 while (isActive) {
                     withContext(Dispatchers.Main) { emitProgress(session) }
+                    tick++
+                    if (tick % CLEANUP_CHECK_INTERVAL == 0) {
+                        checkAndCleanupDisk(cache)
+                    }
                     delay(1000)
                 }
             }
@@ -328,7 +343,7 @@ class TorrentService : Service() {
 
                 // Phase 6: Start proxy — critical pieces already downloaded
                 stopProxy()
-                val proxy = StreamProxy(movieFile, torrentStream)
+                val proxy = StreamProxy(movieFile, torrentStream, cache)
                 proxy.start()
                 streamProxy = proxy
 
@@ -359,6 +374,69 @@ class TorrentService : Service() {
         }
     }
 
+    /**
+     * Checks device free space and truncates the torrent download file if space is low.
+     * After truncation, forceRecheck() resets libtorrent's piece state so it re-downloads
+     * around the current playhead. The PieceCache bridges playback during re-download.
+     */
+    private fun checkAndCleanupDisk(cache: PieceCache) {
+        try {
+            val downloadDir = engine.getDownloadPath()
+            if (!downloadDir.exists()) return
+
+            val stat = StatFs(downloadDir.path)
+            val freeBytes = stat.availableBlocksLong * stat.blockSizeLong
+            if (freeBytes >= MIN_FREE_SPACE_BYTES) return
+
+            val handle = currentHandle ?: return
+            val torrentInfo = try { handle.torrentFile() } catch (_: Exception) { return }
+
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent",
+                "Low disk space: ${freeBytes / 1024 / 1024}MB free, triggering cleanup")
+
+            // Truncate all files in the download directory to reclaim space
+            downloadDir.listFiles()?.forEach { file ->
+                if (file.isFile && file.length() > 0) {
+                    try {
+                        FileOutputStream(file).close()
+                    } catch (_: Exception) { }
+                }
+            }
+
+            // Reset libtorrent's piece state — near-instant on empty files
+            handle.forceRecheck()
+
+            // Re-prioritize around current playhead
+            val playhead = cache.latestAccessedPiece
+            if (playhead >= 0) {
+                val totalPieces = torrentInfo.numPieces()
+                val priorities = Array(totalPieces) { Priority.IGNORE }
+                // Prioritize LOOKAHEAD pieces ahead of playhead
+                for (i in 0 until 15) {
+                    val idx = playhead + i
+                    if (idx < totalPieces) {
+                        priorities[idx] = Priority.TOP_PRIORITY
+                    }
+                }
+                handle.prioritizePieces(priorities)
+                // Set deadlines for immediate pieces
+                for (i in 0 until 15) {
+                    val idx = playhead + i
+                    if (idx < totalPieces) {
+                        try { handle.setPieceDeadline(idx, 1000 * (i + 1)) } catch (_: Exception) { }
+                    }
+                }
+            }
+
+            val statAfter = StatFs(downloadDir.path)
+            val freedMB = (statAfter.availableBlocksLong * statAfter.blockSizeLong - freeBytes) / 1024 / 1024
+            if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
+                "Disk cleanup done: freed ~${freedMB}MB, playhead piece=${cache.latestAccessedPiece}")
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Disk cleanup error", e)
+        }
+    }
+
     private fun updateNotification(text: String) {
         val channelId = "torrent_channel"
         val notification = NotificationCompat.Builder(this, channelId)
@@ -384,6 +462,8 @@ class TorrentService : Service() {
         removeCurrentTorrent()
         engine.saveState()
         cleanupDownloads()
+        pieceCache?.clear()
+        pieceCache = null
         job.cancel()
         onStreamReady = null
         onStreamError = null

@@ -7,7 +7,8 @@ import java.io.File
 
 class StreamProxy(
     private val file: File,
-    private val stream: TorrentStream
+    private val stream: TorrentStream,
+    private val cache: PieceCache
 ) : NanoHTTPD("127.0.0.1", 0) {
 
     override fun serve(session: IHTTPSession): Response {
@@ -28,7 +29,7 @@ class StreamProxy(
     }
 
     private fun serveFullContent(fileLength: Long, mimeType: String): Response {
-        val tis = TorrentInputStream(file, stream)
+        val tis = TorrentInputStream(file, stream, cache)
         return newFixedLengthResponse(Response.Status.OK, mimeType, tis, fileLength).apply {
             addHeader("Accept-Ranges", "bytes")
             addHeader("Content-Length", fileLength.toString())
@@ -86,7 +87,7 @@ class StreamProxy(
         }
 
         val contentLength = end - start + 1
-        val rangeStream = TorrentInputStream(file, stream, startOffset = start, length = contentLength)
+        val rangeStream = TorrentInputStream(file, stream, cache, startOffset = start, length = contentLength)
 
         return newFixedLengthResponse(
             Response.Status.PARTIAL_CONTENT, mimeType, rangeStream, contentLength
