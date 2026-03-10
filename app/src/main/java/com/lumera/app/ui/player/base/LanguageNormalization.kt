@@ -63,16 +63,46 @@ internal val languageNameToIso2Map: Map<String, String> by lazy {
     }
 }
 
+/**
+ * Regional language variants to preserve instead of collapsing to the base code.
+ * Checked early in normalization to keep e.g. "pt-BR" distinct from "pt".
+ */
+internal val regionalLanguageVariants = mapOf(
+    // Brazilian Portuguese
+    "pt-br" to "pt-BR",
+    // Latin American Spanish (UN M.49 code 419)
+    "es-419" to "es-419",
+    "es-mx" to "es-419",
+    "es-ar" to "es-419",
+    "es-co" to "es-419",
+    "es-cl" to "es-419",
+    "es-pe" to "es-419",
+    "es-ve" to "es-419",
+    "es-ec" to "es-419",
+    "es-gt" to "es-419",
+    "es-cu" to "es-419",
+    "es-bo" to "es-419",
+    "es-do" to "es-419",
+    "es-hn" to "es-419",
+    "es-py" to "es-419",
+    "es-sv" to "es-419",
+    "es-ni" to "es-419",
+    "es-cr" to "es-419",
+    "es-pa" to "es-419",
+    "es-uy" to "es-419",
+    "es-pr" to "es-419"
+)
+
 internal val addonLanguageAliasToIso2 = mapOf(
     // Common addon/non-ISO language tags.
-    "pob" to "pt", // Portuguese (Brazil)
-    "ptbr" to "pt",
-    "ptpt" to "pt",
-    "pb" to "pt",
-    "spn" to "es", // Spanish
-    "spl" to "es", // Spanish (LATAM variants in some addons)
+    "pob" to "pt-BR", // Portuguese (Brazil)
+    "ptbr" to "pt-BR",
+    "pb" to "pt-BR",
+    "ptpt" to "pt",   // Portuguese (Portugal)
+    "spn" to "es",     // Spanish (generic)
     "esp" to "es",
-    "esl" to "es",
+    "spl" to "es-419", // Spanish (Latin America)
+    "esl" to "es-419",
     "zht" to "zh", // Chinese (traditional variants)
     "zhs" to "zh", // Chinese (simplified variants)
     "zhe" to "zh",
@@ -106,7 +136,11 @@ internal fun normalizeLanguageToIso2(language: String?): String {
         ?.takeIf { it.isNotEmpty() }
         ?: return "und"
 
+    // Check regional variants before stripping region (e.g. pt-br → pt-BR, es-419 → es-419)
+    regionalLanguageVariants[normalized]?.let { return it }
+
     val primarySubtag = normalized.substringBefore('-').takeIf { it.isNotBlank() } ?: return "und"
+    val regionSubtag = normalized.substringAfter('-', "").takeIf { it.isNotBlank() }
     val compactPrimarySubtag = primarySubtag.filter { it in 'a'..'z' }
     if (compactPrimarySubtag == "und") return "und"
 
@@ -117,11 +151,18 @@ internal fun normalizeLanguageToIso2(language: String?): String {
     // Group all Chinese addon variants into one bucket (zht, zhs, zh-cn, zh.tw, etc.).
     if (compactPrimarySubtag.startsWith("zh")) return "zh"
 
-    // Collapse locale variants and normalize aliases:
-    // en-US / eng / english -> en
-    if (compactPrimarySubtag.length == 2) return compactPrimarySubtag
+    // Resolve to ISO-639-1 then check if the resolved code + region is a known variant
+    val iso2 = when {
+        compactPrimarySubtag.length == 2 -> compactPrimarySubtag
+        else -> iso3ToIso2LanguageMap[compactPrimarySubtag]
+    }
 
-    iso3ToIso2LanguageMap[compactPrimarySubtag]?.let { return it }
+    if (iso2 != null) {
+        if (regionSubtag != null) {
+            regionalLanguageVariants["$iso2-$regionSubtag"]?.let { return it }
+        }
+        return iso2
+    }
 
     normalizedLanguageNameKey(primarySubtag)
         ?.let { key ->
