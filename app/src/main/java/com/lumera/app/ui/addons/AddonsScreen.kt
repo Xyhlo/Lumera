@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -67,6 +68,8 @@ fun AddonsScreen(
     val installButtonFocus = remember { FocusRequester() }
     var pendingFocusUrl by remember { mutableStateOf<String?>(null) }
     var focusInstallAfterDelete by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(focusInstallAfterDelete) {
         if (focusInstallAfterDelete) {
@@ -205,6 +208,7 @@ fun AddonsScreen(
 
         // 2. ADDON LIST
         LazyColumn(
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 50.dp)
         ) {
@@ -231,8 +235,16 @@ fun AddonsScreen(
                             selectedAddon = addon
                         }
                     },
-                    onMoveUp = { viewModel.moveAddon(addon, -1) },
-                    onMoveDown = { viewModel.moveAddon(addon, 1) },
+                    onMoveUp = {
+                        viewModel.moveAddon(addon, -1)
+                        val target = index - 1
+                        scope.launch { delay(50); listState.animateScrollToItem((target - 1).coerceAtLeast(0)) }
+                    },
+                    onMoveDown = {
+                        viewModel.moveAddon(addon, 1)
+                        val target = index + 1
+                        scope.launch { delay(50); listState.animateScrollToItem((target - 1).coerceAtLeast(0)) }
+                    },
                     modifier = goBackModifier.then(
                         if (isReordering) Modifier.onPreviewKeyEvent {
                             if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft) {
