@@ -96,7 +96,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import android.media.MediaPlayer
+import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.profile.ProfileConfigurationManager
+import kotlinx.coroutines.runBlocking
 
 import java.util.Locale
 import javax.inject.Inject
@@ -687,6 +689,8 @@ class MainActivity : ComponentActivity() {
     lateinit var profileConfigurationManager: ProfileConfigurationManager
     @Inject
     lateinit var appUpdateManager: AppUpdateManager
+    @Inject
+    lateinit var addonDao: AddonDao
 
     private var splashPlayer: MediaPlayer? = null
     private var splashOverlay: android.view.View? = null
@@ -815,7 +819,10 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val showSplash = savedInstanceState?.getBoolean(KEY_SPLASH_SHOWN) != true
+        val splashEnabledInProfile = profileConfigurationManager.getLastActiveProfileId()?.let { id ->
+            runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
+        }?.splashEnabled ?: true
+        val showSplash = splashEnabledInProfile && savedInstanceState?.getBoolean(KEY_SPLASH_SHOWN) != true
         if (!showSplash) _splashFinished.value = true
 
         if (showSplash) {

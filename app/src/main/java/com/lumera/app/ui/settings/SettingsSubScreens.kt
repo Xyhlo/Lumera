@@ -126,7 +126,9 @@ fun PersonalizationSettings(
     val navPos = currentProfile.navPosition
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
@@ -145,9 +147,8 @@ fun PersonalizationSettings(
 
         Spacer(Modifier.height(15.dp))
 
-        // 3. POSTER CORNERS
+        // POSTER CORNERS
         SettingRow("Poster Corners") {
-            // Here "Round" => true, "Sharp" => false
             VoidSegmentedControl(
                 options = listOf("Round" to true, "Sharp" to false),
                 selectedOption = roundCorners,
@@ -160,9 +161,8 @@ fun PersonalizationSettings(
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
         Spacer(Modifier.height(15.dp))
 
-        // 3.5 HUB SHAPE (NEW)
+        // HUB SHAPE
         SettingRow("Hub Shape") {
-            // Here "Round" => true, "Sharp" => false
             VoidSegmentedControl(
                 options = listOf("Round" to true, "Sharp" to false),
                 selectedOption = hubRoundCorners,
@@ -189,12 +189,26 @@ fun PersonalizationSettings(
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
         Spacer(Modifier.height(15.dp))
 
-        // 4. MENU POSITION
+        // MENU POSITION
         SettingRow("Menu Position") {
             VoidSegmentedControl(
                 options = listOf("Left" to "left", "Top" to "top"),
                 selectedOption = navPos,
                 onOptionSelected = { viewModel.updateNavPosition(currentProfile.id, it) },
+                onBack = onGoBack,
+                blockUp = false
+            )
+        }
+        Spacer(Modifier.height(15.dp))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+        Spacer(Modifier.height(15.dp))
+
+        // SPLASH SCREEN
+        SettingRow("Splash Screen") {
+            VoidSegmentedControl(
+                options = listOf("On" to true, "Off" to false),
+                selectedOption = currentProfile.splashEnabled,
+                onOptionSelected = { viewModel.updateSplashEnabled(currentProfile.id, it) },
                 onBack = onGoBack,
                 blockUp = false
             )

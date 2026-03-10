@@ -16,6 +16,7 @@ data class ProfileEntity(
     val hubRoundCorners: Boolean = true,
     val continueWatchingShape: String = "poster",  // "poster" or "landscape"
     val navPosition: String = "left",
+    val splashEnabled: Boolean = true,
 
     val homeTabLayout: String = "cinematic",
     val moviesTabLayout: String = "cinematic",
