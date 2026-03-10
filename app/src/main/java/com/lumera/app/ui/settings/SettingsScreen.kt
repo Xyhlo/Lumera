@@ -62,6 +62,7 @@ fun SettingsScreen(
     entryRequester: FocusRequester,
     drawerRequester: FocusRequester,
     onDashboardChanged: () -> Unit = {},
+    onContentFocusChanged: (Boolean) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     var selectedSection by remember { mutableStateOf(SettingsSection.Personalization) }
@@ -139,7 +140,7 @@ fun SettingsScreen(
                 .weight(0.28f)
                 .fillMaxHeight()
                 .padding(top = colTopPadding, start = colStartPadding, end = 16.dp)
-                .onFocusChanged { if (it.hasFocus) isContentFocused = false }
+                .onFocusChanged { if (it.hasFocus) { isContentFocused = false; onContentFocusChanged(false) } }
                 .rememberLastFocus()
         ) {
             Text(
@@ -237,7 +238,7 @@ fun SettingsScreen(
                 .focusGroup()
                 .focusRequester(contentPaneRequester)
                 .rememberLastFocus()
-                .onFocusChanged { if (it.hasFocus) isContentFocused = true }
+                .onFocusChanged { if (it.hasFocus) { isContentFocused = true; onContentFocusChanged(true) } }
         ) {
             // INCREASED PADDING: Gutter 64dp (Sidebar ends at weight 0.28, this starts at 0 without extra padding logic, so we add start padding here)
             Column(modifier = Modifier.fillMaxSize().padding(top = contentTopPadding, start = 64.dp, end = 80.dp)) {

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lumera.app.data.update.AppUpdateManager
 import com.lumera.app.data.update.UpdateInfo
@@ -95,6 +101,7 @@ import com.lumera.app.data.profile.ProfileConfigurationManager
 import java.util.Locale
 import javax.inject.Inject
 
+private const val DOUBLE_BACK_EXIT_WINDOW_MS = 400L
 private const val SOURCE_SELECTION_COMMIT_MIN_POSITION_MS = 5_000L
 private const val SOURCE_SELECTION_FAILURE_RESET_MAX_POSITION_MS = 1_000L
 
@@ -897,8 +904,16 @@ class MainActivity : ComponentActivity() {
                 ) {
                 LumeraBackground {
                     if (currentProfile == null) {
-                        // Consume system back on profile selection instead of closing the app.
-                        BackHandler { }
+                        // Double-back-to-exit on profile selection
+                        var lastBackPressMs by remember { mutableStateOf(0L) }
+                        BackHandler {
+                            val now = SystemClock.uptimeMillis()
+                            if (now - lastBackPressMs < DOUBLE_BACK_EXIT_WINDOW_MS) {
+                                finishAffinity()
+                            } else {
+                                lastBackPressMs = now
+                            }
+                        }
 
                         val isRestoringSession = sessionProfileId != null
                         if (!isRestoringSession) {
@@ -989,6 +1004,10 @@ class MainActivity : ComponentActivity() {
                             // CONDITIONAL NAVIGATION RENDERING (no animation)
                             val view = activeView
                             if (view == "menu") {
+                                // Double-back-to-exit: two rapid back presses exit the app
+                                var lastBackPressMs by remember { mutableStateOf(0L) }
+                                var settingsContentFocused by remember { mutableStateOf(false) }
+
                                 // Shared content composable
                                 // Shared navigation handler
                                 val handleNavigate: (NavDestination) -> Unit = { destination ->
@@ -1004,6 +1023,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } else {
                                         if (currentNav == NavDestination.Search) searchFocusTarget = null
+                                        if (currentNav == NavDestination.Settings) settingsContentFocused = false
                                         currentNav = destination
                                     }
                                 }
@@ -1017,7 +1037,26 @@ class MainActivity : ComponentActivity() {
                                         else -> {}
                                     }
                                 }
-                                
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .onPreviewKeyEvent { event ->
+                                            if (settingsContentFocused) return@onPreviewKeyEvent false
+                                            if (event.key == Key.Back && event.type == KeyEventType.KeyDown) {
+                                                val now = SystemClock.uptimeMillis()
+                                                if (now - lastBackPressMs < DOUBLE_BACK_EXIT_WINDOW_MS) {
+                                                    finishAffinity()
+                                                    true
+                                                } else {
+                                                    lastBackPressMs = now
+                                                    false
+                                                }
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                ) {
                                 Crossfade(targetState = navPosition, animationSpec = tween(400), label = "NavSwitcher") { position ->
                                 if (position == "top") {
                                     TopNavigationBar(
@@ -1139,7 +1178,8 @@ class MainActivity : ComponentActivity() {
                                                         },
                                                         entryRequester = settingsEntryRequester,
                                                         drawerRequester = drawerRequesters[NavDestination.Settings]!!,
-                                                        onDashboardChanged = { homeVm.invalidate() }
+                                                        onDashboardChanged = { homeVm.invalidate() },
+                                                        onContentFocusChanged = { settingsContentFocused = it }
                                                     )
                                                 }
                                                 NavDestination.Exit -> { /* App closes */ }
@@ -1258,7 +1298,8 @@ class MainActivity : ComponentActivity() {
                                                         },
                                                         entryRequester = settingsEntryRequester,
                                                         drawerRequester = drawerRequesters[NavDestination.Settings]!!,
-                                                        onDashboardChanged = { homeVm.invalidate() }
+                                                        onDashboardChanged = { homeVm.invalidate() },
+                                                        onContentFocusChanged = { settingsContentFocused = it }
                                                     )
                                                 }
                                                 NavDestination.Exit -> { /* App closes */ }
@@ -1267,6 +1308,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 } // Crossfade end
+                                } // Double-back Box end
                         } else if (view == "grid") {
                             val gridVm = hiltViewModel<HomeViewModel>()
                             GridViewScreen(
