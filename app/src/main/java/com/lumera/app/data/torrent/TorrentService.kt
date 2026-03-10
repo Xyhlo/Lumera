@@ -102,7 +102,7 @@ class TorrentService : Service() {
                 api.addTorrent(magnet)
 
                 // Phase 3: Resolve correct video file, then start streaming
-                val targetFileIndex = resolveLargestFile(magnet, fileIdx)
+                val targetFileIndex = resolveFileIndex(magnet, fileIdx)
                 if (BuildConfig.DEBUG) Log.d(TAG, "Streaming file index: $targetFileIndex")
 
                 val streamUrl = api.getStreamUrl(magnet, targetFileIndex)
@@ -149,15 +149,40 @@ class TorrentService : Service() {
 
     private val videoExtensions = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
 
-    private suspend fun resolveLargestFile(magnet: String, hintIdx: Int): Int {
+    private suspend fun resolveFileIndex(magnet: String, hintIdx: Int): Int {
         val deadline = System.currentTimeMillis() + 15_000L
         while (System.currentTimeMillis() < deadline) {
             val files = api.getFileList(magnet)
             if (files.isNotEmpty()) {
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "File list (${files.size} files), hintIdx=$hintIdx:")
+                    files.forEach { f -> Log.d(TAG, "  id=${f.id} path=${f.path} size=${f.length / 1024 / 1024}MB") }
+                }
                 val videoFiles = files.filter { f ->
                     val ext = f.path.substringAfterLast('.', "").lowercase()
                     ext in videoExtensions
                 }
+                // If addon provided a specific file index (0-based torrent index), use it
+                // TorrServer IDs are 1-based, so fileIdx N = TorrServer id N+1
+                if (hintIdx >= 0) {
+                    // Strategy 1: match by ID offset (most reliable)
+                    val byId = videoFiles.firstOrNull { it.id == hintIdx + 1 }
+                    if (byId != null) {
+                        if (BuildConfig.DEBUG) Log.d(TAG, "Using addon hint (by id): ${byId.path} (id=${byId.id})")
+                        return byId.id
+                    }
+                    // Strategy 2: positional index into full file list
+                    if (hintIdx < files.size) {
+                        val byPos = files[hintIdx]
+                        val ext = byPos.path.substringAfterLast('.', "").lowercase()
+                        if (ext in videoExtensions) {
+                            if (BuildConfig.DEBUG) Log.d(TAG, "Using addon hint (by pos): ${byPos.path} (id=${byPos.id})")
+                            return byPos.id
+                        }
+                    }
+                    if (BuildConfig.DEBUG) Log.w(TAG, "Hint idx=$hintIdx not resolved, falling back to largest")
+                }
+                // Fallback: pick largest video file
                 val target = videoFiles.maxByOrNull { it.length }
                     ?: files.maxByOrNull { it.length }!!
                 if (BuildConfig.DEBUG) Log.d(TAG, "Resolved file: ${target.path} (${target.length / 1024 / 1024} MB, id=${target.id})")
