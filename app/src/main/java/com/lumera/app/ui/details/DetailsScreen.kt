@@ -77,6 +77,9 @@ fun DetailsScreen(
     resumePlaybackHint: String? = null,
     autoSelectSource: Boolean = false,
     rememberSourceSelection: Boolean = true,
+    sourceSortingEnabled: Boolean = true,
+    sourceEnabledQualities: String = "4k,1080p,720p,unknown",
+    sourceExcludePhrases: String = "",
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
     viewModel: DetailsViewModel = hiltViewModel()
 ) {
@@ -324,7 +327,7 @@ fun DetailsScreen(
                                 pendingPlaybackId = epId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = epTitle
-                                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection, sourceSortingEnabled = sourceSortingEnabled, sourceEnabledQualities = sourceEnabledQualities, sourceExcludePhrases = sourceExcludePhrases)
                             }
                         )
 
@@ -358,7 +361,7 @@ fun DetailsScreen(
                                 pendingPlaybackId = id
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = currentMovie.name
-                                viewModel.loadStreams(type, id, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, id, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection, sourceSortingEnabled = sourceSortingEnabled, sourceEnabledQualities = sourceEnabledQualities, sourceExcludePhrases = sourceExcludePhrases)
                             }
                         )
 
@@ -402,7 +405,7 @@ fun DetailsScreen(
                 pendingPlaybackId = epId
                 pendingPlaybackType = type
                 pendingPlaybackTitle = epTitle
-                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection, sourceSortingEnabled = sourceSortingEnabled, sourceEnabledQualities = sourceEnabledQualities, sourceExcludePhrases = sourceExcludePhrases)
             },
             onSourceSelected = { stream ->
                 viewModel.closeSidebar()

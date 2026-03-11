@@ -333,6 +333,12 @@ class AddonRepository @Inject constructor(
         jobs.awaitAll().flatten()
     }
 
+    suspend fun getAddonSortOrders(): Map<String, Int> = withContext(Dispatchers.IO) {
+        dao.getAllAddons().firstOrNull()
+            ?.associate { it.transportUrl to it.sortOrder }
+            ?: emptyMap()
+    }
+
     suspend fun installAddonWithConfig(url: String, home: Boolean, movies: Boolean, series: Boolean) = withContext(Dispatchers.IO) {
         val manifest = api.getManifest(url)
         val transportUrl = url.removeSuffix("/manifest.json")

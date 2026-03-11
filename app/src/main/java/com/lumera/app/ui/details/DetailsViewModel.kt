@@ -5,14 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.data.model.stremio.Stream
+import com.lumera.app.data.model.StreamQuality
 import com.lumera.app.data.player.PlaybackTrackSelectionStore
 import com.lumera.app.data.player.SourceSelectionStore
 import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.SubtitleRepository
+import com.lumera.app.data.stream.StreamSortingService
 import com.lumera.app.domain.AddonSubtitle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.WatchHistoryEntity
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +33,8 @@ class DetailsViewModel @Inject constructor(
     private val playbackTrackSelectionStore: PlaybackTrackSelectionStore,
     private val repository: AddonRepository,
     private val subtitleRepository: SubtitleRepository,
-    private val profileConfigurationManager: ProfileConfigurationManager
+    private val profileConfigurationManager: ProfileConfigurationManager,
+    private val streamSortingService: StreamSortingService
 ) : ViewModel() {
 
     data class DetailsState(
@@ -167,7 +171,10 @@ class DetailsViewModel @Inject constructor(
         displayTitle: String,
         forceSourcePicker: Boolean = false,
         autoSelectSource: Boolean = false,
-        rememberSourceSelection: Boolean = true
+        rememberSourceSelection: Boolean = true,
+        sourceSortingEnabled: Boolean = true,
+        sourceEnabledQualities: String = "4k,1080p,720p,unknown",
+        sourceExcludePhrases: String = ""
     ) {
         loadStreamsJob?.cancel()
         loadStreamsJob = viewModelScope.launch {
@@ -190,8 +197,17 @@ class DetailsViewModel @Inject constructor(
                 val streamsDeferred = async { repository.getStreams(type, id) }
                 val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
 
-                val streams = streamsDeferred.await()
+                val rawStreams = streamsDeferred.await()
                 val addonSubtitles = subtitlesDeferred.await()
+
+                val streams = if (sourceSortingEnabled) {
+                    val enabledQualities = StreamSortingService.parseEnabledQualities(sourceEnabledQualities)
+                    val excludePhrases = StreamSortingService.parseExcludePhrases(sourceExcludePhrases)
+                    val addonSortOrders = dao.getAllAddons().firstOrNull()
+                        ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
+                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders)
+                } else rawStreams
+
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
                     null
                 } else {

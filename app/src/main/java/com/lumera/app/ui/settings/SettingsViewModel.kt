@@ -188,4 +188,25 @@ class SettingsViewModel @Inject constructor(
             if (profile != null) dao.insertProfile(profile.copy(subtitleBackgroundColor = color))
         }
     }
+
+    fun updateSourceSortingEnabled(profileId: Int, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceSortingEnabled = enabled))
+        }
+    }
+
+    fun updateSourceEnabledQualities(profileId: Int, qualities: String) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceEnabledQualities = qualities))
+        }
+    }
+
+    fun updateSourceExcludePhrases(profileId: Int, phrases: String) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceExcludePhrases = phrases))
+        }
+    }
 }

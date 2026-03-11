@@ -63,6 +63,7 @@ import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.IntroRepository
 import com.lumera.app.data.repository.SubtitleRepository
+import com.lumera.app.data.stream.StreamSortingService
 import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.domain.DashboardTab
 import com.lumera.app.domain.episodeDisplayTitle
@@ -685,6 +686,8 @@ class MainActivity : ComponentActivity() {
     lateinit var appUpdateManager: AppUpdateManager
     @Inject
     lateinit var addonDao: AddonDao
+    @Inject
+    lateinit var streamSortingService: StreamSortingService
 
     private var splashPlayer: MediaPlayer? = null
     private var splashOverlay: android.view.View? = null
@@ -1369,6 +1372,9 @@ class MainActivity : ComponentActivity() {
                                 resumePlaybackHint = detailsResumePlaybackHint,
                                 autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                 rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
+                                sourceSortingEnabled = currentProfile?.sourceSortingEnabled ?: true,
+                                sourceEnabledQualities = currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown",
+                                sourceExcludePhrases = currentProfile?.sourceExcludePhrases ?: "",
                                 onPlayClick = { url, playbackId, playbackType, playbackTitle, seriesTitle, logo, stream, addonSubtitles, availableStreams, episodes ->
                                     val resolvedPlaybackTitle = playbackTitle.ifBlank { selectedMovieTitle }
                                     val resolvedSeriesTitle = seriesTitle.ifBlank { selectedMovieTitle }
@@ -1590,8 +1596,15 @@ class MainActivity : ComponentActivity() {
                                             val streamsDeferred = async { try { addonRepository.getStreams("series", nextPlaybackId) } catch (_: Exception) { emptyList() } }
                                             val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", nextPlaybackId) } catch (_: Exception) { emptyList() } }
 
-                                            val streams = streamsDeferred.await()
+                                            val rawStreams = streamsDeferred.await()
                                             val addonSubs = subtitlesDeferred.await()
+
+                                            val streams = if (currentProfile?.sourceSortingEnabled == true) {
+                                                val enabledQ = StreamSortingService.parseEnabledQualities(currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
+                                                val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
+                                                val addonOrders = addonRepository.getAddonSortOrders()
+                                                streamSortingService.sortAndFilter(rawStreams, enabledQ, excludeP, addonOrders)
+                                            } else rawStreams
 
                                             if (streams.isEmpty()) {
                                                 playerState.isEpisodeSwitchLoading = false
@@ -1734,8 +1747,15 @@ class MainActivity : ComponentActivity() {
                                             val streamsDeferred = async { try { addonRepository.getStreams("series", epPlaybackId) } catch (_: Exception) { emptyList() } }
                                             val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", epPlaybackId) } catch (_: Exception) { emptyList() } }
 
-                                            val streams = streamsDeferred.await()
+                                            val rawStreams2 = streamsDeferred.await()
                                             val addonSubs = subtitlesDeferred.await()
+
+                                            val streams = if (currentProfile?.sourceSortingEnabled == true) {
+                                                val enabledQ = StreamSortingService.parseEnabledQualities(currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
+                                                val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
+                                                val addonOrders = addonRepository.getAddonSortOrders()
+                                                streamSortingService.sortAndFilter(rawStreams2, enabledQ, excludeP, addonOrders)
+                                            } else rawStreams2
 
                                             if (streams.isEmpty()) {
                                                 playerState.isEpisodeSwitchLoading = false

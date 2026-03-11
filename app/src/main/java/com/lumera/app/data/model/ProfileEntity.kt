@@ -45,6 +45,9 @@ data class ProfileEntity(
     val autoplayThresholdSeconds: Int = 30,             // 10..300
     val autoSelectSource: Boolean = false,
     val rememberSourceSelection: Boolean = true,
+    val sourceSortingEnabled: Boolean = true,
+    val sourceEnabledQualities: String = "4k,1080p,720p,unknown",
+    val sourceExcludePhrases: String = "",
     val skipIntro: Boolean = true,
 
     val preferredAudioLanguage: String = "",
