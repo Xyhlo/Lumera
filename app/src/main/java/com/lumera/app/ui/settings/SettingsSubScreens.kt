@@ -480,7 +480,7 @@ fun PlaybackSettings(
 
             SettingLanguageRow(
                 label = "Subtitle Appearance",
-                currentDisplayName = "${currentProfile.subtitleSize}%",
+                currentDisplayName = "Manage",
                 isSet = currentProfile.subtitleSize != 100 ||
                         currentProfile.subtitleOffset != 0 ||
                         currentProfile.subtitleTextColor != 0xFFFFFFFFL ||
@@ -1573,7 +1573,7 @@ fun SourcePreferencesSettings(
     ) {
         // HEADER
         Text(
-            "Source Preferences",
+            "Sort & Filter",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
             color = Color.White
         )
@@ -1589,7 +1589,7 @@ fun SourcePreferencesSettings(
         // ENABLE SORTING
         SettingToggleRow(
             label = "Sort Sources",
-            subtitle = "Rank sources by quality, file size, and seed count",
+            subtitle = "Rank sources by quality or file size",
             isChecked = currentProfile.sourceSortingEnabled,
             onCheckedChange = { viewModel.updateSourceSortingEnabled(currentProfile.id, it) },
             onBack = onGoBack,
