@@ -418,18 +418,22 @@ class AddonRepository @Inject constructor(
         id: String,
         preferredAddonBaseUrl: String? = null
     ): MetaItem? = withContext(Dispatchers.IO) {
-        // 1) Try preferred addon first (the addon the catalog item came from)
+        val allAddons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
+
+        // 1) Try preferred addon first, but only if it supports meta
         if (!preferredAddonBaseUrl.isNullOrBlank()) {
-            try {
-                val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
-                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
-                if (meta != null) return@withContext meta
-            } catch (_: Exception) { /* try fallback */ }
+            val preferredAddon = allAddons.find { it.transportUrl == preferredAddonBaseUrl }
+            if (preferredAddon?.supportsMeta == true) {
+                try {
+                    val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
+                    val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                    if (meta != null) return@withContext meta
+                } catch (_: Exception) { /* try fallback */ }
+            }
         }
 
         // 2) Priority-based fallback across all meta addons
-        val addons = dao.getAllAddons().firstOrNull()
-            ?.filter { it.isEnabled && it.supportsMeta } ?: emptyList()
+        val addons = allAddons.filter { it.supportsMeta }
 
         val requestedType = type.trim()
         val inferredType = inferCanonicalType(requestedType, id)
