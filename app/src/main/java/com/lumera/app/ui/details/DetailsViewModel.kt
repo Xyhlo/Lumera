@@ -40,6 +40,7 @@ class DetailsViewModel @Inject constructor(
     data class DetailsState(
         val meta: MetaItem? = null,
         val resolvedId: String? = null, // IMDb ID resolved from tmdb: prefixes, used for stream/subtitle fetching
+        val contentKey: String? = null, // Tracks which item this state belongs to
         val isLoading: Boolean = true,
         val isLoadingStreams: Boolean = false,
         val resumePlaybackId: String? = null,
@@ -107,6 +108,7 @@ class DetailsViewModel @Inject constructor(
                 _state.value = _state.value.copy(
                     meta = details,
                     resolvedId = streamFetchId,
+                    contentKey = requestKey,
                     isLoading = false,
                     resumePlaybackId = resumePlaybackId,
                     autoPlayStream = null,

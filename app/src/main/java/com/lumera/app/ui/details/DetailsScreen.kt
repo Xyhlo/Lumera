@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,13 +84,12 @@ fun DetailsScreen(
 ) {
     LaunchedEffect(type, id) { viewModel.loadDetails(type, id, addonBaseUrl) }
 
-    // key() forces Compose to destroy and recreate the content tree when navigation
-    // params change, preventing the previous item's details from flashing for one frame.
-    key(type, id) {
     val state by viewModel.state.collectAsState()
     val movie = state.meta
     val streamId = state.resolvedId ?: movie?.id ?: id // Resolved IMDb ID for stream/subtitle requests
-    val isCurrentMovie = movie != null && !state.isLoading
+    // Check contentKey to prevent stale content from the previous item flashing for one frame.
+    // contentKey is set when meta loads and matches "$type:$id" of the navigation params.
+    val isCurrentMovie = movie != null && !state.isLoading && state.contentKey == "$type:$id"
     val showMovieContent = isCurrentMovie
     val sidebarState = if (isCurrentMovie) state.sidebarState else SidebarState.Closed
 
@@ -455,7 +453,6 @@ fun DetailsScreen(
             }
         }
     }
-    } // key(type, id)
 }
 
 @Composable
