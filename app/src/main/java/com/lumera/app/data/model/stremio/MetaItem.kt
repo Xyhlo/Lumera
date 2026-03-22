@@ -22,7 +22,8 @@ data class MetaItem(
     val runtime: String? = null,
     val genres: List<String>? = null,
     val videos: List<MetaVideo>? = null,
-    @Transient val progress: Float = 0f // Watch progress (0.0–1.0), used by Continue Watching
+    @Transient val progress: Float = 0f, // Watch progress (0.0–1.0), used by Continue Watching
+    @Transient val addonBaseUrl: String? = null // Origin addon URL, used for preferred meta resolution
 )
 
 @Immutable

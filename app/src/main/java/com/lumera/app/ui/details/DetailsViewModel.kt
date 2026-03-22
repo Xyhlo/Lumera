@@ -60,7 +60,7 @@ class DetailsViewModel @Inject constructor(
     private var clearedHistoryStash: List<WatchHistoryEntity> = emptyList()
     private var clearedResumeId: String? = null
 
-    fun loadDetails(type: String, id: String) {
+    fun loadDetails(type: String, id: String, addonBaseUrl: String? = null) {
         val requestKey = "$type:$id"
 
         // Keep current details when reopening the same item (e.g., returning from player).
@@ -92,7 +92,7 @@ class DetailsViewModel @Inject constructor(
 
         loadDetailsJob = viewModelScope.launch {
             try {
-                val details = repository.resolveMetaDetails(type, id)
+                val details = repository.resolveMetaDetails(type, id, addonBaseUrl)
                     ?: throw Exception("No meta found")
                 if (requestVersion != loadRequestVersion) return@launch
                 loadedContentKey = requestKey

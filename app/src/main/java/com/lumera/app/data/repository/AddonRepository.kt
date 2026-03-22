@@ -70,7 +70,9 @@ class AddonRepository @Inject constructor(
             } catch (e: Exception) { emptyList() }
         }
 
+        val cinemeta = "https://v3-cinemeta.strem.io"
         return@withContext (movieJob.await() + seriesJob.await())
+            .map { it.copy(addonBaseUrl = cinemeta) }
     }
 
     /**
@@ -193,8 +195,9 @@ class AddonRepository @Inject constructor(
                 try {
                     val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
                     // Fetch only the first page for fast initial load
-                    val metas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize() } catch (e: Exception) { emptyList() }
-                    if (metas.isNotEmpty()) {
+                    val rawMetas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize() } catch (e: Exception) { emptyList() }
+                    if (rawMetas.isNotEmpty()) {
+                        val metas = rawMetas.map { it.copy(addonBaseUrl = config.transportUrl) }
                         val typeSuffix = config.catalogType.replaceFirstChar { it.uppercase() }
                         val defaultTitle = if (config.catalogName != null) "${config.catalogName} - ${typeSuffix}" else "${config.addonName} - ${config.catalogId.replaceFirstChar { it.uppercase() }}"
                         val finalTitle = config.customTitle ?: defaultTitle
@@ -405,39 +408,97 @@ class AddonRepository @Inject constructor(
     suspend fun getMetaDetails(url: String) = withContext(Dispatchers.IO) { api.getMeta(url).meta }
 
     /**
-     * Resolves meta details by querying installed addons that support the meta resource
-     * for the given type/id, falling back to Cinemeta for standard types.
+     * Resolves meta details using a priority system:
+     * 1. Try the preferred addon (the one the catalog item came from) first
+     * 2. Fall back to all meta addons with type-based priority ordering
+     * 3. Last resort: Cinemeta for standard types
      */
-    suspend fun resolveMetaDetails(type: String, id: String): MetaItem? = withContext(Dispatchers.IO) {
-        val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled && it.supportsMeta } ?: emptyList()
-
-        // Find addons whose declared types or idPrefixes match the request
-        val matchingAddons = addons.filter { addon ->
-            val types: List<String> = try {
-                gson.fromJson(addon.typesJson, Array<String>::class.java)?.toList() ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-            val prefixes: List<String> = try {
-                gson.fromJson(addon.idPrefixesJson, Array<String>::class.java)?.toList() ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-
-            val typeMatches = types.contains(type)
-            val prefixMatches = prefixes.isEmpty() || prefixes.any { id.startsWith(it) }
-            typeMatches && prefixMatches
+    suspend fun resolveMetaDetails(
+        type: String,
+        id: String,
+        preferredAddonBaseUrl: String? = null
+    ): MetaItem? = withContext(Dispatchers.IO) {
+        // 1) Try preferred addon first (the addon the catalog item came from)
+        if (!preferredAddonBaseUrl.isNullOrBlank()) {
+            try {
+                val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                if (meta != null) return@withContext meta
+            } catch (_: Exception) { /* try fallback */ }
         }
 
-        // Try matching addons first
-        for (addon in matchingAddons) {
+        // 2) Priority-based fallback across all meta addons
+        val addons = dao.getAllAddons().firstOrNull()
+            ?.filter { it.isEnabled && it.supportsMeta } ?: emptyList()
+
+        val requestedType = type.trim()
+        val inferredType = inferCanonicalType(requestedType, id)
+
+        // Build prioritized candidate list (LinkedHashSet preserves insertion order, deduplicates)
+        val candidates = linkedSetOf<Pair<AddonEntity, String>>()
+
+        // Priority 1: Addons that explicitly support the requested type
+        for (addon in addons) {
+            if (addon.supportsMetaType(requestedType)) {
+                candidates.add(addon to requestedType)
+            }
+        }
+
+        // Priority 2: Addons that support the inferred canonical type (for custom catalog types)
+        if (!inferredType.equals(requestedType, ignoreCase = true)) {
+            for (addon in addons) {
+                if (addon.supportsMetaType(inferredType)) {
+                    candidates.add(addon to inferredType)
+                }
+            }
+        }
+
+        // Priority 3: First meta addon as ultimate addon fallback
+        addons.firstOrNull()?.let { fallback ->
+            val fallbackType = when {
+                fallback.supportsMetaType(requestedType) -> requestedType
+                fallback.supportsMetaType(inferredType) -> inferredType
+                else -> inferredType.ifBlank { requestedType }
+            }
+            candidates.add(fallback to fallbackType)
+        }
+
+        // Try each candidate, skip the preferred addon (already tried above)
+        for ((addon, candidateType) in candidates) {
+            if (addon.transportUrl == preferredAddonBaseUrl) continue
             try {
-                val url = "${addon.transportUrl}/meta/$type/$id.json"
+                val url = "${addon.transportUrl}/meta/$candidateType/$id.json"
                 val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
                 if (meta != null) return@withContext meta
             } catch (_: Exception) { /* try next */ }
         }
 
-        // Fall back to Cinemeta for standard types
+        // Last resort: Cinemeta for standard types
         try {
             val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
             return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
         } catch (_: Exception) { null }
+    }
+
+    private fun AddonEntity.supportsMetaType(type: String): Boolean {
+        if (!supportsMeta) return false
+        val types: List<String> = try {
+            gson.fromJson(typesJson, Array<String>::class.java)?.toList() ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+        if (types.isEmpty()) return true
+        return types.any { it.equals(type, ignoreCase = true) }
+    }
+
+    private fun inferCanonicalType(type: String, id: String): String {
+        val known = setOf("movie", "series", "tv", "channel", "anime")
+        if (type.lowercase() in known) return type
+        val normalizedId = id.lowercase()
+        return when {
+            ":movie:" in normalizedId -> "movie"
+            ":series:" in normalizedId -> "series"
+            ":tv:" in normalizedId -> "tv"
+            ":anime:" in normalizedId -> "anime"
+            else -> type
+        }
     }
 }

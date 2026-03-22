@@ -853,6 +853,7 @@ class MainActivity : ComponentActivity() {
             var selectedMovieTitle by rememberSaveable { mutableStateOf("") }
             var selectedMoviePoster by rememberSaveable { mutableStateOf("") }
             var selectedMovieLogo by rememberSaveable { mutableStateOf("") }
+            var selectedAddonBaseUrl by rememberSaveable { mutableStateOf<String?>(null) }
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
             var selectedPlaybackId by rememberSaveable { mutableStateOf("") }
             var selectedPlaybackType by rememberSaveable { mutableStateOf("movie") }
@@ -1099,6 +1100,7 @@ class MainActivity : ComponentActivity() {
                                                                 selectedMovieTitle = movie.name
                                                                 selectedMoviePoster = movie.poster ?: ""
                                                                 selectedMovieLogo = movie.logo ?: ""
+                                                                selectedAddonBaseUrl = movie.addonBaseUrl
                                                                 detailsResumePlaybackHint = null
                                                                 selectedPlaybackId = movie.id
                                                                 selectedPlaybackType = movie.type
@@ -1125,6 +1127,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
                                                             selectedPlaybackId = movie.id
                                                             selectedPlaybackType = movie.type
@@ -1153,6 +1156,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
                                                             selectedPlaybackId = movie.id
                                                             selectedPlaybackType = movie.type
@@ -1219,6 +1223,7 @@ class MainActivity : ComponentActivity() {
                                                                 selectedMovieTitle = movie.name
                                                                 selectedMoviePoster = movie.poster ?: ""
                                                                 selectedMovieLogo = movie.logo ?: ""
+                                                                selectedAddonBaseUrl = movie.addonBaseUrl
                                                                 detailsResumePlaybackHint = null
                                                                 selectedPlaybackId = movie.id
                                                                 selectedPlaybackType = movie.type
@@ -1245,6 +1250,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
                                                             selectedPlaybackId = movie.id
                                                             selectedPlaybackType = movie.type
@@ -1273,6 +1279,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
                                                             selectedPlaybackId = movie.id
                                                             selectedPlaybackType = movie.type
@@ -1327,6 +1334,7 @@ class MainActivity : ComponentActivity() {
                                     selectedMovieTitle = movie.name
                                     selectedMoviePoster = movie.poster ?: ""
                                     selectedMovieLogo = movie.logo ?: ""
+                                    selectedAddonBaseUrl = movie.addonBaseUrl
                                     detailsResumePlaybackHint = null
                                     selectedPlaybackId = movie.id
                                     selectedPlaybackType = movie.type
@@ -1370,6 +1378,7 @@ class MainActivity : ComponentActivity() {
                             DetailsScreen(
                                 type = selectedMovieType,
                                 id = selectedMovieId,
+                                addonBaseUrl = selectedAddonBaseUrl,
                                 resumePlaybackHint = detailsResumePlaybackHint,
                                 autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                 rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,

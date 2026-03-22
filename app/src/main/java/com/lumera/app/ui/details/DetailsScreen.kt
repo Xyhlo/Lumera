@@ -75,13 +75,14 @@ import com.lumera.app.R
 fun DetailsScreen(
     type: String,
     id: String,
+    addonBaseUrl: String? = null,
     resumePlaybackHint: String? = null,
     autoSelectSource: Boolean = false,
     rememberSourceSelection: Boolean = true,
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
     viewModel: DetailsViewModel = hiltViewModel()
 ) {
-    LaunchedEffect(type, id) { viewModel.loadDetails(type, id) }
+    LaunchedEffect(type, id) { viewModel.loadDetails(type, id, addonBaseUrl) }
 
     val state by viewModel.state.collectAsState()
     val movie = state.meta
