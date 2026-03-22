@@ -319,7 +319,7 @@ fun DetailsScreen(
                             onClick = {
                                 val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
                                 val trackId = resumePlaybackId ?: episodePlaybackId(id, ep)
-                                val streamId = episodeStreamId(id, ep)
+                                val streamId = episodeStreamId(currentMovie.id, ep)
                                 val epTitle = when {
                                     resumePlaybackId != null && resumeEpisode != null -> episodeDisplayTitle(resumeEpisode)
                                     resumePlaybackId != null && parsedResumeSeasonEpisode != null ->
@@ -361,10 +361,10 @@ fun DetailsScreen(
                             icon = Icons.Default.PlayArrow,
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
-                                pendingPlaybackId = id
+                                pendingPlaybackId = currentMovie.id
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = currentMovie.name
-                                viewModel.loadStreams(type, id, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, currentMovie.id, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
                             }
                         )
 
@@ -403,8 +403,9 @@ fun DetailsScreen(
             onDismiss = { viewModel.closeSidebar() },
             onBack = { viewModel.goBackInSidebar() },
             onEpisodeSelected = { episode ->
-                val trackId = episodePlaybackId(id, episode)
-                val streamId = episodeStreamId(id, episode)
+                val resolvedId = movie?.id ?: id
+                val trackId = episodePlaybackId(resolvedId, episode)
+                val streamId = episodeStreamId(resolvedId, episode)
                 val epTitle = episodeDisplayTitle(episode)
                 pendingPlaybackId = trackId
                 pendingPlaybackType = type
