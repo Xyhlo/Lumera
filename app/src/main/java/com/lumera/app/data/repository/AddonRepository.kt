@@ -419,6 +419,7 @@ class AddonRepository @Inject constructor(
         preferredAddonBaseUrl: String? = null
     ): MetaItem? = withContext(Dispatchers.IO) {
         val allAddons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
+        val preferredTimeout = 5_000L // Shorter timeout for preferred addon — fail fast for catalog-only addons
 
         // 1) Try preferred addon first (the addon the catalog item came from).
         // Don't check supportsMeta flag — it may be stale from older DB migrations.
@@ -426,7 +427,7 @@ class AddonRepository @Inject constructor(
         if (!preferredAddonBaseUrl.isNullOrBlank()) {
             try {
                 val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
-                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                val meta = withTimeout(preferredTimeout) { api.getMeta(url) }.meta
                 if (meta != null) return@withContext meta
             } catch (_: Exception) { /* try fallback */ }
         }
@@ -466,13 +467,16 @@ class AddonRepository @Inject constructor(
             candidates.add(fallback to fallbackType)
         }
 
-        // Try each candidate, skip the preferred addon (already tried above)
+        // Try each candidate, skip the preferred addon (already tried above).
+        // Validate that returned meta ID matches the request — addons like TMDB may return
+        // meta with a different ID (e.g. tmdb:12345 instead of tt1234567), which causes
+        // the details screen to appear stuck since it checks movie.id == requestedId.
         for ((addon, candidateType) in candidates) {
             if (addon.transportUrl == preferredAddonBaseUrl) continue
             try {
                 val url = "${addon.transportUrl}/meta/$candidateType/$id.json"
                 val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
-                if (meta != null) return@withContext meta
+                if (meta != null && meta.id == id) return@withContext meta
             } catch (_: Exception) { /* try next */ }
         }
 
