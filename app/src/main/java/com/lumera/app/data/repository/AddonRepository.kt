@@ -420,16 +420,15 @@ class AddonRepository @Inject constructor(
     ): MetaItem? = withContext(Dispatchers.IO) {
         val allAddons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
 
-        // 1) Try preferred addon first, but only if it supports meta
+        // 1) Try preferred addon first (the addon the catalog item came from).
+        // Don't check supportsMeta flag — it may be stale from older DB migrations.
+        // If the addon can't serve meta, the request fails fast and we fall through.
         if (!preferredAddonBaseUrl.isNullOrBlank()) {
-            val preferredAddon = allAddons.find { it.transportUrl == preferredAddonBaseUrl }
-            if (preferredAddon?.supportsMeta == true) {
-                try {
-                    val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
-                    val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
-                    if (meta != null) return@withContext meta
-                } catch (_: Exception) { /* try fallback */ }
-            }
+            try {
+                val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                if (meta != null) return@withContext meta
+            } catch (_: Exception) { /* try fallback */ }
         }
 
         // 2) Priority-based fallback across all meta addons
