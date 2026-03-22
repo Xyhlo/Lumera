@@ -86,8 +86,10 @@ fun DetailsScreen(
 
     val state by viewModel.state.collectAsState()
     val movie = state.meta
-    val isCurrentMovie = movie?.id == id && movie.type == type
-    val showMovieContent = movie != null && isCurrentMovie && !state.isLoading
+    // Don't use strict ID matching — addons may return a resolved ID (e.g. tmdb:123 → tt456).
+    // The ViewModel already prevents stale data via requestVersion.
+    val isCurrentMovie = movie != null && !state.isLoading
+    val showMovieContent = isCurrentMovie
     val sidebarState = if (isCurrentMovie) state.sidebarState else SidebarState.Closed
 
     val accentColor = MaterialTheme.colorScheme.primary

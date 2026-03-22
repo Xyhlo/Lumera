@@ -419,7 +419,7 @@ class AddonRepository @Inject constructor(
         preferredAddonBaseUrl: String? = null
     ): MetaItem? = withContext(Dispatchers.IO) {
         val allAddons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
-        val preferredTimeout = 5_000L // Shorter timeout for preferred addon — fail fast for catalog-only addons
+        val preferredTimeout = 5_000L
 
         // 1) Try preferred addon first (the addon the catalog item came from).
         // Don't check supportsMeta flag — it may be stale from older DB migrations.
@@ -468,7 +468,7 @@ class AddonRepository @Inject constructor(
         }
 
         // Try each candidate, skip the preferred addon (already tried above).
-        // Validate that returned meta ID matches the request — addons like TMDB may return
+        // Validate that returned meta ID matches the request — addons may return
         // meta with a different ID (e.g. tmdb:12345 instead of tt1234567), which causes
         // the details screen to appear stuck since it checks movie.id == requestedId.
         for ((addon, candidateType) in candidates) {
