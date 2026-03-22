@@ -1200,9 +1200,15 @@ private fun PlayerControlsOverlay(
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.82f)
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.15f to Color.Black.copy(alpha = 0.05f),
+                            0.3f to Color.Black.copy(alpha = 0.14f),
+                            0.45f to Color.Black.copy(alpha = 0.28f),
+                            0.6f to Color.Black.copy(alpha = 0.44f),
+                            0.75f to Color.Black.copy(alpha = 0.60f),
+                            0.88f to Color.Black.copy(alpha = 0.74f),
+                            1.0f to Color.Black.copy(alpha = 0.82f)
                         )
                     )
                 )

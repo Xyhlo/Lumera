@@ -226,28 +226,37 @@ fun HeroCarousel(
                         .allowHardware(true)
                         .build()
                 }
-                AsyncImage(
-                    model = request,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopCenter,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .drawWithCache {
-                            val bottomGradient = Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0f to Color.Transparent,
-                                    0.4f to backgroundColor.copy(0.2f),
-                                    0.7f to backgroundColor.copy(0.6f),
-                                    1f to backgroundColor
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = request,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .drawWithCache {
+                                val bottomGradient = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Transparent,
+                                        0.2f to backgroundColor.copy(0.05f),
+                                        0.35f to backgroundColor.copy(0.15f),
+                                        0.45f to backgroundColor.copy(0.25f),
+                                        0.55f to backgroundColor.copy(0.38f),
+                                        0.65f to backgroundColor.copy(0.52f),
+                                        0.75f to backgroundColor.copy(0.68f),
+                                        0.85f to backgroundColor.copy(0.82f),
+                                        0.92f to backgroundColor.copy(0.92f),
+                                        1.0f to backgroundColor
+                                    )
                                 )
-                            )
-                            onDrawWithContent {
-                                drawContent()
-                                drawRect(bottomGradient)
+                                onDrawWithContent {
+                                    drawContent()
+                                    drawRect(bottomGradient)
+                                }
                             }
-                        }
-                )
+                    )
+                    com.lumera.app.ui.components.NoiseOverlay()
+                }
             }
         }
 

@@ -173,12 +173,23 @@ fun DetailsScreen(
                     .fillMaxSize()
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(bg, Color.Transparent),
+                            colorStops = arrayOf(
+                                0.0f to bg,
+                                0.1f to bg.copy(alpha = 0.95f),
+                                0.2f to bg.copy(alpha = 0.85f),
+                                0.3f to bg.copy(alpha = 0.72f),
+                                0.4f to bg.copy(alpha = 0.58f),
+                                0.55f to bg.copy(alpha = 0.38f),
+                                0.7f to bg.copy(alpha = 0.20f),
+                                0.85f to bg.copy(alpha = 0.08f),
+                                1.0f to Color.Transparent
+                            ),
                             startX = 0f,
                             endX = 1500f
                         )
                     )
             )
+            com.lumera.app.ui.components.NoiseOverlay()
 
             Column(
                 modifier = Modifier

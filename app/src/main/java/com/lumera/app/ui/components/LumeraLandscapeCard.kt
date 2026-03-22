@@ -146,9 +146,15 @@ fun LumeraLandscapeCard(
                         .align(Alignment.BottomStart)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.85f)
+                                colorStops = arrayOf(
+                                    0.0f to Color.Transparent,
+                                    0.15f to Color.Black.copy(alpha = 0.05f),
+                                    0.3f to Color.Black.copy(alpha = 0.15f),
+                                    0.45f to Color.Black.copy(alpha = 0.30f),
+                                    0.6f to Color.Black.copy(alpha = 0.48f),
+                                    0.75f to Color.Black.copy(alpha = 0.64f),
+                                    0.88f to Color.Black.copy(alpha = 0.77f),
+                                    1.0f to Color.Black.copy(alpha = 0.85f)
                                 )
                             )
                         )

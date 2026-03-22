@@ -81,7 +81,18 @@ fun GlassSidebarScaffold(
                 Modifier
                     .fillMaxHeight()
                     .width(panelWidth)
-                    .background(Brush.horizontalGradient(listOf(Color(0xCC000000), Color(0xFA000000))))
+                    .background(Brush.horizontalGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color(0xCC000000),
+                            0.15f to Color(0xD2000000),
+                            0.3f to Color(0xD9000000),
+                            0.45f to Color(0xE1000000),
+                            0.6f to Color(0xE9000000),
+                            0.75f to Color(0xF0000000),
+                            0.88f to Color(0xF6000000),
+                            1.0f to Color(0xFA000000)
+                        )
+                    ))
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(panelPadding)
             ) {
@@ -380,7 +391,18 @@ fun FilterDropdown(currentValue: String, options: List<String>, modifier: Modifi
                     .width(rowWidth) // Enforce symmetry
                     // Apply the glass gradient here manually
                     .background(
-                        brush = Brush.horizontalGradient(listOf(Color(0xCC000000), Color(0xFA000000))),
+                        brush = Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color(0xCC000000),
+                                0.15f to Color(0xD2000000),
+                                0.3f to Color(0xD9000000),
+                                0.45f to Color(0xE1000000),
+                                0.6f to Color(0xE9000000),
+                                0.75f to Color(0xF0000000),
+                                0.88f to Color(0xF6000000),
+                                1.0f to Color(0xFA000000)
+                            )
+                        ),
                         shape = RoundedCornerShape(8.dp)
                     )
                     // Clip ensures the background respects the rounded shape

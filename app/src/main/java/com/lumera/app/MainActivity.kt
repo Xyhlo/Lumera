@@ -808,6 +808,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFormat(android.graphics.PixelFormat.RGBA_8888)
 
         // Fix sideload launch bug: pressing Home and returning re-creates the activity
         // instead of resuming it when the APK was installed via adb/sideload.

@@ -118,10 +118,16 @@ fun TopNavigationBar(
                     .zIndex(1f)
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                backgroundColor.copy(alpha = 0.8f),
-                                backgroundColor.copy(alpha = 0.4f),
-                                Color.Transparent
+                            colorStops = arrayOf(
+                                0.0f to backgroundColor.copy(alpha = 0.8f),
+                                0.12f to backgroundColor.copy(alpha = 0.72f),
+                                0.25f to backgroundColor.copy(alpha = 0.62f),
+                                0.38f to backgroundColor.copy(alpha = 0.50f),
+                                0.50f to backgroundColor.copy(alpha = 0.38f),
+                                0.65f to backgroundColor.copy(alpha = 0.24f),
+                                0.78f to backgroundColor.copy(alpha = 0.13f),
+                                0.90f to backgroundColor.copy(alpha = 0.05f),
+                                1.0f to Color.Transparent
                             ),
                             startY = 0f,
                             endY = 400f
@@ -143,10 +149,16 @@ fun TopNavigationBar(
                     .height(300.dp)
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                backgroundColor.copy(alpha = 0.95f),
-                                backgroundColor.copy(alpha = 0.7f),
-                                Color.Transparent
+                            colorStops = arrayOf(
+                                0.0f to backgroundColor.copy(alpha = 0.95f),
+                                0.12f to backgroundColor.copy(alpha = 0.90f),
+                                0.25f to backgroundColor.copy(alpha = 0.82f),
+                                0.38f to backgroundColor.copy(alpha = 0.70f),
+                                0.50f to backgroundColor.copy(alpha = 0.55f),
+                                0.65f to backgroundColor.copy(alpha = 0.38f),
+                                0.78f to backgroundColor.copy(alpha = 0.20f),
+                                0.90f to backgroundColor.copy(alpha = 0.08f),
+                                1.0f to Color.Transparent
                             ),
                             startY = 0f,
                             endY = 600f
@@ -154,6 +166,9 @@ fun TopNavigationBar(
                     )
             )
         }
+
+        // Noise overlay to reduce gradient banding on budget panels
+        com.lumera.app.ui.components.NoiseOverlay(modifier = Modifier.zIndex(1.6f))
 
         // LAYER 4: Main Navigation Bar (Settings + Center Items)
         Box(

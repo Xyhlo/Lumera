@@ -1191,22 +1191,33 @@ fun CinematicBackground(item: MetaItem?) {
     // Only fade LEFT and BOTTOM edges - top/right are at screen edge
     val leftFade = Brush.horizontalGradient(
         colorStops = arrayOf(
-            0f to backgroundColor,
-            0.3f to backgroundColor.copy(0.8f),
-            0.6f to backgroundColor.copy(0.3f),
-            1f to Color.Transparent
+            0.0f to backgroundColor,
+            0.1f to backgroundColor.copy(0.95f),
+            0.2f to backgroundColor.copy(0.85f),
+            0.3f to backgroundColor.copy(0.72f),
+            0.4f to backgroundColor.copy(0.55f),
+            0.55f to backgroundColor.copy(0.35f),
+            0.7f to backgroundColor.copy(0.18f),
+            0.85f to backgroundColor.copy(0.07f),
+            1.0f to Color.Transparent
         ),
-        startX = 0f, 
+        startX = 0f,
         endX = 500f
     )
     
     // Bottom fade: blend into the rows area
     val bottomFade = Brush.verticalGradient(
         colorStops = arrayOf(
-            0f to Color.Transparent,
-            0.4f to backgroundColor.copy(0.2f),
-            0.7f to backgroundColor.copy(0.6f),
-            1f to backgroundColor
+            0.0f to Color.Transparent,
+            0.2f to backgroundColor.copy(0.05f),
+            0.35f to backgroundColor.copy(0.15f),
+            0.45f to backgroundColor.copy(0.25f),
+            0.55f to backgroundColor.copy(0.38f),
+            0.65f to backgroundColor.copy(0.52f),
+            0.75f to backgroundColor.copy(0.68f),
+            0.85f to backgroundColor.copy(0.82f),
+            0.92f to backgroundColor.copy(0.92f),
+            1.0f to backgroundColor
         )
     )
 
@@ -1239,13 +1250,14 @@ fun CinematicBackground(item: MetaItem?) {
                         Spacer(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .drawWithCache { 
-                                    onDrawWithContent { 
+                                .drawWithCache {
+                                    onDrawWithContent {
                                         drawRect(brush = leftFade)
                                         drawRect(brush = bottomFade)
-                                    } 
+                                    }
                                 }
                         )
+                        com.lumera.app.ui.components.NoiseOverlay()
                     }
                 }
             }
