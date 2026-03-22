@@ -86,6 +86,7 @@ fun DetailsScreen(
 
     val state by viewModel.state.collectAsState()
     val movie = state.meta
+    val streamId = state.resolvedId ?: movie?.id ?: id // Resolved IMDb ID for stream/subtitle requests
     // Don't use strict ID matching — addons may return a resolved ID (e.g. tmdb:123 → tt456).
     // The ViewModel already prevents stale data via requestVersion.
     val isCurrentMovie = movie != null && !state.isLoading
@@ -318,8 +319,8 @@ fun DetailsScreen(
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
                                 val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
-                                val trackId = resumePlaybackId ?: episodePlaybackId(id, ep)
-                                val streamId = episodeStreamId(currentMovie.id, ep)
+                                val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
+                                val epStreamId = episodeStreamId(streamId, ep)
                                 val epTitle = when {
                                     resumePlaybackId != null && resumeEpisode != null -> episodeDisplayTitle(resumeEpisode)
                                     resumePlaybackId != null && parsedResumeSeasonEpisode != null ->
@@ -330,7 +331,7 @@ fun DetailsScreen(
                                 pendingPlaybackId = trackId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = epTitle
-                                viewModel.loadStreams(type, streamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
                             }
                         )
 
@@ -361,10 +362,10 @@ fun DetailsScreen(
                             icon = Icons.Default.PlayArrow,
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
-                                pendingPlaybackId = currentMovie.id
+                                pendingPlaybackId = streamId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = currentMovie.name
-                                viewModel.loadStreams(type, currentMovie.id, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, streamId, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
                             }
                         )
 
@@ -403,14 +404,13 @@ fun DetailsScreen(
             onDismiss = { viewModel.closeSidebar() },
             onBack = { viewModel.goBackInSidebar() },
             onEpisodeSelected = { episode ->
-                val resolvedId = movie?.id ?: id
-                val trackId = episodePlaybackId(resolvedId, episode)
-                val streamId = episodeStreamId(resolvedId, episode)
+                val trackId = episodePlaybackId(streamId, episode)
+                val epStreamId = episodeStreamId(streamId, episode)
                 val epTitle = episodeDisplayTitle(episode)
                 pendingPlaybackId = trackId
                 pendingPlaybackType = type
                 pendingPlaybackTitle = epTitle
-                viewModel.loadStreams(type, streamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
             },
             onSourceSelected = { stream ->
                 viewModel.closeSidebar()

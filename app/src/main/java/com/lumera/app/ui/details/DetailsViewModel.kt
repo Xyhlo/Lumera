@@ -39,6 +39,7 @@ class DetailsViewModel @Inject constructor(
 
     data class DetailsState(
         val meta: MetaItem? = null,
+        val resolvedId: String? = null, // IMDb ID resolved from tmdb: prefixes, used for stream/subtitle fetching
         val isLoading: Boolean = true,
         val isLoadingStreams: Boolean = false,
         val resumePlaybackId: String? = null,
@@ -96,13 +97,16 @@ class DetailsViewModel @Inject constructor(
                     ?: throw Exception("No meta found")
                 if (requestVersion != loadRequestVersion) return@launch
                 loadedContentKey = requestKey
+                // Use the meta's returned ID for streams — addons may resolve tmdb: to tt* IDs
+                val streamFetchId = details.id
                 val resumePlaybackId = if (details.type == "series") {
-                    dao.getLatestSeriesEpisodeHistory("${details.id}:%")?.id
+                    dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%")?.id
                 } else {
-                    dao.getHistoryItem(details.id)?.id
+                    dao.getHistoryItem(streamFetchId)?.id
                 }
                 _state.value = _state.value.copy(
                     meta = details,
+                    resolvedId = streamFetchId,
                     isLoading = false,
                     resumePlaybackId = resumePlaybackId,
                     autoPlayStream = null,
