@@ -563,8 +563,8 @@ fun DetailsScreen(
                         val castPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
-                            SectionHeader("Cast", textColor)
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader("Cast", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             CastRow(castMembers, accentColor, textColor, firstItemRequester = castPivot)
                         }
@@ -577,8 +577,8 @@ fun DetailsScreen(
                         val trailerPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
-                            SectionHeader("Trailers", textColor)
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             TrailerRow(tmdbVideos, accentColor, textColor, firstItemRequester = trailerPivot)
                         }
@@ -589,8 +589,8 @@ fun DetailsScreen(
                 val allStudios = companies + networks.map { TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId) }
                 if (allStudios.isNotEmpty()) {
                     item(key = "tmdb_studios") {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
-                            SectionHeader("Studios", textColor)
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader("Studios", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             StudioRow(allStudios, textColor)
                         }
@@ -602,8 +602,8 @@ fun DetailsScreen(
                         val recsPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
-                            SectionHeader("More Like This", textColor)
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader("More Like This", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             RecommendationRow(tmdbRecommendations, accentColor, firstItemRequester = recsPivot)
                         }
@@ -617,8 +617,8 @@ fun DetailsScreen(
                         val collPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
-                            SectionHeader(collectionName, textColor)
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader(collectionName, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             RecommendationRow(tmdbCollection, accentColor, firstItemRequester = collPivot)
                         }
@@ -745,11 +745,12 @@ private fun ImdbBadge() {
 // ── TMDB Section Components ──
 
 @Composable
-private fun SectionHeader(title: String, textColor: Color) {
+private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = Modifier) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = textColor.copy(alpha = 0.9f)
+        color = textColor.copy(alpha = 0.9f),
+        modifier = modifier
     )
 }
 
@@ -772,7 +773,7 @@ private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Col
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(end = endPadding)
+            contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(cast.take(20), key = { _, it -> it.tmdbId ?: it.name }) { index, member ->
                 Box(modifier = Modifier
@@ -862,7 +863,7 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = endPadding)
+            contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(videos.take(6), key = { _, it -> it.key }) { index, video ->
                 Box(modifier = Modifier
@@ -992,7 +993,7 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, 
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = endPadding)
+            contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(items, key = { _, it -> it.tmdbId }) { index, item ->
                 Box(modifier = Modifier
