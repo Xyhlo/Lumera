@@ -132,7 +132,7 @@ fun PlayerScreen(
 
     LaunchedEffect(playbackController) {
         while (true) {
-            delay(30_000L)
+            delay(10_000L)
             val state = playbackController.uiState.value
             if (state.isPlaying && state.positionMs > 0L) {
                 viewModel.saveProgress(

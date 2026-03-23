@@ -77,6 +77,9 @@ interface AddonDao {
     @Query("SELECT * FROM watch_history ORDER BY lastWatched DESC")
     fun getWatchHistory(): Flow<List<WatchHistoryEntity>>
 
+    @Query("SELECT * FROM watch_history")
+    suspend fun getAllWatchHistoryOnce(): List<WatchHistoryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertHistory(item: WatchHistoryEntity)
 
@@ -205,16 +208,34 @@ interface AddonDao {
         hubRowItems: List<HubRowItemEntity>,
         watchHistory: List<WatchHistoryEntity>
     ) {
+        // Replace addon/catalog/hub state from snapshot
         clearHubRowItems()
         clearHubRows()
         clearCatalogConfigs()
         clearAddons()
-        clearWatchHistory()
 
         if (addons.isNotEmpty()) insertAddons(addons)
         if (catalogConfigs.isNotEmpty()) saveCatalogConfigs(catalogConfigs)
         if (hubRows.isNotEmpty()) insertHubRows(hubRows)
         if (hubRowItems.isNotEmpty()) insertHubRowItems(hubRowItems)
-        if (watchHistory.isNotEmpty()) upsertHistoryItems(watchHistory)
+
+        // Merge watch history: keep whichever entry is newer (DB or snapshot).
+        // Prevents a stale snapshot from overwriting progress saved during playback
+        // (e.g., power failure before onStop snapshot could be written).
+        val existing = getAllWatchHistoryOnce().associateBy { it.id }
+        val snapshotMap = watchHistory.associateBy { it.id }
+        val allIds = existing.keys + snapshotMap.keys
+        val merged = allIds.mapNotNull { id ->
+            val db = existing[id]
+            val snap = snapshotMap[id]
+            when {
+                db == null -> snap
+                snap == null -> db
+                snap.lastWatched >= db.lastWatched -> snap
+                else -> db
+            }
+        }
+        clearWatchHistory()
+        if (merged.isNotEmpty()) upsertHistoryItems(merged)
     }
 }
