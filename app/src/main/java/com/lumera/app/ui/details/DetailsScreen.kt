@@ -1,6 +1,7 @@
 package com.lumera.app.ui.details
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,7 +41,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Alignment
@@ -74,14 +82,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import com.lumera.app.R
+import com.lumera.app.ui.home.FocusPivotSpec
 import com.lumera.app.data.tmdb.TmdbCastInfo
 import com.lumera.app.data.tmdb.TmdbCompanyInfo
 import com.lumera.app.data.tmdb.TmdbMetaPreview
@@ -187,6 +203,17 @@ fun DetailsScreen(
         }
     }
 
+    // Vertical pivot for smooth row-to-row scrolling (matches home screen behavior)
+    val density = LocalDensity.current
+    @OptIn(ExperimentalFoundationApi::class)
+    val verticalPivot = remember(density) {
+        val pivotPx = with(density) { 71.dp.toPx() }
+        FocusPivotSpec(
+            customOffset = pivotPx,
+            stiffnessProvider = { Spring.StiffnessLow }
+        )
+    }
+
     // Scroll back to hero when hero buttons get focus
     val onHeroButtonFocused: () -> Unit = remember(listState) {
         {
@@ -244,9 +271,11 @@ fun DetailsScreen(
             val hasEnrichment = enrichment != null
 
             @OptIn(ExperimentalFoundationApi::class)
+            CompositionLocalProvider(LocalBringIntoViewSpec provides verticalPivot) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 100.dp)
             ) {
             // ── Hero item (fixed 540dp height, scroll-suppressed) ──
             item(key = "hero", contentType = "hero") {
@@ -531,12 +560,13 @@ fun DetailsScreen(
 
                 if (castMembers.isNotEmpty()) {
                     item(key = "tmdb_cast") {
+                        val castPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
                             SectionHeader("Cast", textColor)
                             Spacer(modifier = Modifier.height(10.dp))
-                            CastRow(castMembers, accentColor, textColor)
+                            CastRow(castMembers, accentColor, textColor, firstItemRequester = castPivot)
                         }
                         }
                     }
@@ -544,12 +574,13 @@ fun DetailsScreen(
 
                 if (tmdbVideos.isNotEmpty()) {
                     item(key = "tmdb_trailers") {
+                        val trailerPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
                             SectionHeader("Trailers", textColor)
                             Spacer(modifier = Modifier.height(10.dp))
-                            TrailerRow(tmdbVideos, accentColor, textColor)
+                            TrailerRow(tmdbVideos, accentColor, textColor, firstItemRequester = trailerPivot)
                         }
                         }
                     }
@@ -568,12 +599,13 @@ fun DetailsScreen(
 
                 if (tmdbRecommendations.isNotEmpty()) {
                     item(key = "tmdb_recs") {
+                        val recsPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
                             SectionHeader("More Like This", textColor)
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbRecommendations, accentColor)
+                            RecommendationRow(tmdbRecommendations, accentColor, firstItemRequester = recsPivot)
                         }
                         }
                     }
@@ -582,12 +614,13 @@ fun DetailsScreen(
                 val collectionName = state.tmdbCollectionName
                 if (tmdbCollection.isNotEmpty() && collectionName != null) {
                     item(key = "tmdb_collection") {
+                        val collPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
                             SectionHeader(collectionName, textColor)
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbCollection, accentColor)
+                            RecommendationRow(tmdbCollection, accentColor, firstItemRequester = collPivot)
                         }
                         }
                     }
@@ -596,6 +629,7 @@ fun DetailsScreen(
                 item(key = "tmdb_spacer") { Spacer(modifier = Modifier.height(48.dp)) }
             }
             } // LazyColumn
+            } // CompositionLocalProvider verticalPivot
         }
 
         GlassSidebar(
@@ -719,17 +753,42 @@ private fun SectionHeader(title: String, textColor: Color) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(end = 24.dp)
-    ) {
-        items(cast.take(20), key = { it.tmdbId ?: it.name }) { member ->
-            CastCard(member, accentColor, textColor)
+private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+    val rowState = rememberLazyListState()
+    val density = LocalDensity.current
+    val startPad = 48.dp
+    val paddingPx = remember(density) { with(density) { startPad.toPx() } }
+    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val endPadding = (screenWidth - startPad - 80.dp).coerceAtLeast(120.dp)
+
+    CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
+        Box(modifier = Modifier
+            .focusGroup()
+            .focusProperties { enter = { firstItemRequester } }
+        ) {
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(end = endPadding)
+        ) {
+            itemsIndexed(cast.take(20), key = { _, it -> it.tmdbId ?: it.name }) { index, member ->
+                Box(modifier = Modifier
+                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                    }
+                ) {
+                    CastCard(member, accentColor, textColor)
+                }
+            }
+        }
         }
     }
 }
+
 
 @Composable
 private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color) {
@@ -784,14 +843,38 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color)
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(end = 24.dp)
-    ) {
-        items(videos.take(6), key = { it.key }) { video ->
-            TrailerCard(video, accentColor, textColor)
+private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+    val rowState = rememberLazyListState()
+    val density = LocalDensity.current
+    val startPad = 48.dp
+    val paddingPx = remember(density) { with(density) { startPad.toPx() } }
+    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val endPadding = (screenWidth - startPad - 190.dp).coerceAtLeast(120.dp)
+
+    CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
+        Box(modifier = Modifier
+            .focusGroup()
+            .focusProperties { enter = { firstItemRequester } }
+        ) {
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = endPadding)
+        ) {
+            itemsIndexed(videos.take(6), key = { _, it -> it.key }) { index, video ->
+                Box(modifier = Modifier
+                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                    }
+                ) {
+                    TrailerCard(video, accentColor, textColor)
+                }
+            }
+        }
         }
     }
 }
@@ -890,14 +973,38 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(end = 24.dp)
-    ) {
-        items(items, key = { it.tmdbId }) { item ->
-            RecommendationCard(item, accentColor)
+private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+    val rowState = rememberLazyListState()
+    val density = LocalDensity.current
+    val startPad = 48.dp
+    val paddingPx = remember(density) { with(density) { startPad.toPx() } }
+    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val endPadding = (screenWidth - startPad - 120.dp).coerceAtLeast(120.dp)
+
+    CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
+        Box(modifier = Modifier
+            .focusGroup()
+            .focusProperties { enter = { firstItemRequester } }
+        ) {
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(end = endPadding)
+        ) {
+            itemsIndexed(items, key = { _, it -> it.tmdbId }) { index, item ->
+                Box(modifier = Modifier
+                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                    }
+                ) {
+                    RecommendationCard(item, accentColor)
+                }
+            }
+        }
         }
     }
 }
