@@ -1,5 +1,8 @@
 package com.lumera.app.di
 
+import com.lumera.app.data.remote.StremioApiService
+import com.lumera.app.data.remote.IntroDbService
+import com.lumera.app.data.remote.TmdbApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -8,7 +11,12 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class TmdbRetrofit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -36,13 +44,30 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideStremioApi(retrofit: Retrofit): com.lumera.app.data.remote.StremioApiService {
-        return retrofit.create(com.lumera.app.data.remote.StremioApiService::class.java)
+    @TmdbRetrofit
+    fun provideTmdbRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://api.themoviedb.org/3/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
     }
 
     @Provides
     @Singleton
-    fun provideIntroDbService(retrofit: Retrofit): com.lumera.app.data.remote.IntroDbService {
-        return retrofit.create(com.lumera.app.data.remote.IntroDbService::class.java)
+    fun provideStremioApi(retrofit: Retrofit): StremioApiService {
+        return retrofit.create(StremioApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideIntroDbService(retrofit: Retrofit): IntroDbService {
+        return retrofit.create(IntroDbService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideTmdbApiService(@TmdbRetrofit retrofit: Retrofit): TmdbApiService {
+        return retrofit.create(TmdbApiService::class.java)
     }
 }
