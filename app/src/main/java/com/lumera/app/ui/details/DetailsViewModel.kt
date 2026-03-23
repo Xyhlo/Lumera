@@ -1,5 +1,6 @@
 package com.lumera.app.ui.details
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
@@ -12,6 +13,11 @@ import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.SubtitleRepository
 import com.lumera.app.data.stream.StreamSortingService
+import com.lumera.app.data.tmdb.TmdbEnrichment
+import com.lumera.app.data.tmdb.TmdbMetaPreview
+import com.lumera.app.data.tmdb.TmdbMetadataService
+import com.lumera.app.data.tmdb.TmdbService
+import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.WatchHistoryEntity
@@ -34,7 +40,9 @@ class DetailsViewModel @Inject constructor(
     private val repository: AddonRepository,
     private val subtitleRepository: SubtitleRepository,
     private val profileConfigurationManager: ProfileConfigurationManager,
-    private val streamSortingService: StreamSortingService
+    private val streamSortingService: StreamSortingService,
+    private val tmdbService: TmdbService,
+    private val tmdbMetadataService: TmdbMetadataService
 ) : ViewModel() {
 
     data class DetailsState(
@@ -48,13 +56,20 @@ class DetailsViewModel @Inject constructor(
         val addonSubtitles: List<AddonSubtitle> = emptyList(),
         val availableStreams: List<Stream> = emptyList(),
         val sidebarState: SidebarState = SidebarState.Closed,
-        val progressCleared: Boolean = false
+        val progressCleared: Boolean = false,
+        // TMDB enrichment
+        val tmdbEnrichment: TmdbEnrichment? = null,
+        val tmdbRecommendations: List<TmdbMetaPreview> = emptyList(),
+        val tmdbVideos: List<TmdbVideoInfo> = emptyList(),
+        val tmdbCollection: List<TmdbMetaPreview> = emptyList(),
+        val tmdbCollectionName: String? = null
     )
 
     private val _state = MutableStateFlow(DetailsState())
     val state: StateFlow<DetailsState> = _state
     private var loadDetailsJob: Job? = null
     private var loadStreamsJob: Job? = null
+    private var tmdbEnrichmentJob: Job? = null
     private var loadRequestVersion: Long = 0L
     private var loadedContentKey: String? = null
 
@@ -113,8 +128,15 @@ class DetailsViewModel @Inject constructor(
                     resumePlaybackId = resumePlaybackId,
                     autoPlayStream = null,
                     addonSubtitles = emptyList(),
-                    availableStreams = emptyList()
+                    availableStreams = emptyList(),
+                    tmdbEnrichment = null,
+                    tmdbRecommendations = emptyList(),
+                    tmdbVideos = emptyList(),
+                    tmdbCollection = emptyList(),
+                    tmdbCollectionName = null
                 )
+                // Fire TMDB enrichment in background (non-blocking)
+                loadTmdbEnrichment(details.type, streamFetchId, requestKey)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -157,6 +179,79 @@ class DetailsViewModel @Inject constructor(
 
     fun refreshResumeState() {
         refreshResumeStateIfNeeded(_state.value.meta)
+    }
+
+    private fun loadTmdbEnrichment(type: String, videoId: String, contentKey: String) {
+        tmdbEnrichmentJob?.cancel()
+        tmdbEnrichmentJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Check if TMDB is enabled for the active profile
+                val profileId = profileConfigurationManager.getLastActiveProfileId()
+                val profile = profileId?.let { dao.getProfileById(it) }
+                if (profile?.tmdbEnabled != true) return@launch
+
+                val language = profile.tmdbLanguage.ifBlank { null } ?: "en"
+                val mediaType = tmdbService.normalizeMediaType(type)
+
+                // Resolve TMDB ID
+                val tmdbId = tmdbService.ensureTmdbId(videoId, mediaType) ?: return@launch
+
+                // Fetch enrichment, recommendations, and videos in parallel
+                val enrichmentDeferred = async { tmdbMetadataService.fetchEnrichment(tmdbId, mediaType, language) }
+                val recommendationsDeferred = async { tmdbMetadataService.fetchRecommendations(tmdbId, mediaType, language) }
+                val videosDeferred = async { tmdbMetadataService.fetchVideos(tmdbId, mediaType, language) }
+
+                val enrichment = enrichmentDeferred.await()
+                val recommendations = recommendationsDeferred.await()
+                val videos = videosDeferred.await()
+
+                // Fetch collection if available (movies only)
+                val collection = if (enrichment?.collectionId != null) {
+                    tmdbMetadataService.fetchCollection(enrichment.collectionId, language)
+                } else emptyList()
+
+                // Only update if we're still showing the same content
+                if (_state.value.contentKey != contentKey) return@launch
+
+                // Apply enrichment — overlay TMDB data onto existing metadata where it adds value
+                val currentMeta = _state.value.meta
+                val enrichedMeta = if (currentMeta != null && enrichment != null) {
+                    currentMeta.copy(
+                        // Localized title
+                        name = enrichment.localizedTitle ?: currentMeta.name,
+                        // Localized description
+                        description = enrichment.description ?: currentMeta.description,
+                        // Better images
+                        logo = enrichment.logo ?: currentMeta.logo,
+                        background = enrichment.backdrop ?: currentMeta.background,
+                        poster = enrichment.poster ?: currentMeta.poster,
+                        // Localized genres
+                        genres = enrichment.genres.ifEmpty { currentMeta.genres },
+                        // Release info
+                        releaseInfo = enrichment.releaseInfo ?: currentMeta.releaseInfo,
+                        // Rating from TMDB
+                        imdbRating = enrichment.rating?.let {
+                            String.format("%.1f", it)
+                        } ?: currentMeta.imdbRating,
+                        // Runtime
+                        runtime = enrichment.runtimeMinutes?.let { "${it}m" } ?: currentMeta.runtime
+                    )
+                } else currentMeta
+
+                _state.value = _state.value.copy(
+                    meta = enrichedMeta,
+                    tmdbEnrichment = enrichment,
+                    tmdbRecommendations = recommendations,
+                    tmdbVideos = videos,
+                    tmdbCollection = collection,
+                    tmdbCollectionName = enrichment?.collectionName
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("DetailsViewModel", "TMDB enrichment failed: ${e.message}")
+            }
+        }
     }
 
     // 1. Open Episodes (Series)

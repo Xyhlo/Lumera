@@ -69,7 +69,18 @@ import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.domain.episodeDisplayTitle
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import com.lumera.app.R
+import com.lumera.app.data.tmdb.TmdbCastInfo
+import com.lumera.app.data.tmdb.TmdbCompanyInfo
+import com.lumera.app.data.tmdb.TmdbMetaPreview
+import com.lumera.app.data.tmdb.TmdbVideoInfo
 
 @Composable
 fun DetailsScreen(
@@ -191,13 +202,19 @@ fun DetailsScreen(
             )
             com.lumera.app.ui.components.NoiseOverlay()
 
+            val scrollState = rememberScrollState()
+            val enrichment = state.tmdbEnrichment
+            val hasEnrichment = enrichment != null
+
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(600.dp)
+                    .width(if (hasEnrichment) 650.dp else 600.dp)
+                    .verticalScroll(scrollState)
                     .padding(48.dp),
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = if (hasEnrichment) Arrangement.Top else Arrangement.Center
             ) {
+                if (hasEnrichment) Spacer(modifier = Modifier.height(80.dp))
                 val titleStyle = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 32.sp,
@@ -274,6 +291,38 @@ fun DetailsScreen(
                             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                             color = textColor.copy(alpha = 0.95f)
                         )
+                    }
+                }
+
+                // Age rating + runtime from TMDB
+                val ageRating = enrichment?.ageRating
+                val runtimeMin = enrichment?.runtimeMinutes
+                if (ageRating != null || runtimeMin != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ageRating?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = textColor.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .border(1.dp, textColor.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 1.dp)
+                            )
+                        }
+                        runtimeMin?.let {
+                            val hours = it / 60
+                            val mins = it % 60
+                            val display = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+                            Text(
+                                text = display,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = textColor.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
 
@@ -407,6 +456,84 @@ fun DetailsScreen(
                         }
                     }
                 }
+
+                // ── TMDB Enrichment Sections ──
+                if (hasEnrichment) {
+                    val castMembers = enrichment?.castMembers.orEmpty()
+                    val directorMembers = enrichment?.directorMembers.orEmpty()
+                    val writerMembers = enrichment?.writerMembers.orEmpty()
+                    val companies = enrichment?.productionCompanies.orEmpty()
+                    val networks = enrichment?.networks.orEmpty()
+                    val videos = state.tmdbVideos
+                    val recommendations = state.tmdbRecommendations
+                    val collection = state.tmdbCollection
+
+                    // Director / Creator
+                    if (directorMembers.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        val label = directorMembers.first().character ?: "Director"
+                        Text(
+                            text = "$label: ${directorMembers.joinToString { it.name }}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textColor.copy(alpha = 0.7f)
+                        )
+                    }
+                    // Writer
+                    if (writerMembers.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Writer: ${writerMembers.joinToString { it.name }}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textColor.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    // Cast
+                    if (castMembers.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        SectionHeader("Cast", textColor)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        CastRow(castMembers, accentColor, textColor)
+                    }
+
+                    // Trailers
+                    if (videos.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        SectionHeader("Trailers", textColor)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        TrailerRow(videos, accentColor, textColor)
+                    }
+
+                    // Studios & Networks
+                    val allStudios = companies + networks.map {
+                        TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId)
+                    }
+                    if (allStudios.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        SectionHeader("Studios", textColor)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        StudioRow(allStudios, textColor)
+                    }
+
+                    // More Like This
+                    if (recommendations.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        SectionHeader("More Like This", textColor)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        RecommendationRow(recommendations, accentColor)
+                    }
+
+                    // Collection
+                    val collectionName = state.tmdbCollectionName
+                    if (collection.isNotEmpty() && collectionName != null) {
+                        Spacer(modifier = Modifier.height(28.dp))
+                        SectionHeader(collectionName, textColor)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        RecommendationRow(collection, accentColor)
+                    }
+
+                    Spacer(modifier = Modifier.height(48.dp))
+                }
             }
         }
 
@@ -518,6 +645,231 @@ private fun ImdbBadge() {
         contentDescription = "IMDb",
         modifier = Modifier.height(20.dp)
     )
+}
+
+// ── TMDB Section Components ──
+
+@Composable
+private fun SectionHeader(title: String, textColor: Color) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        color = textColor.copy(alpha = 0.9f)
+    )
+}
+
+@Composable
+private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(end = 24.dp)
+    ) {
+        items(cast.take(20), key = { it.tmdbId ?: it.name }) { member ->
+            CastCard(member, accentColor, textColor)
+        }
+    }
+}
+
+@Composable
+private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "castScale")
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(80.dp)
+            .scale(scale)
+            .focusable(interactionSource = interactionSource)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(0.08f))
+                .border(
+                    width = if (isFocused) 2.dp else 0.dp,
+                    color = if (isFocused) accentColor else Color.Transparent,
+                    shape = CircleShape
+                )
+        ) {
+            if (member.photo != null) {
+                AsyncImage(
+                    model = member.photo,
+                    contentDescription = member.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = member.name,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = if (isFocused) Color.White else textColor.copy(alpha = 0.85f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        member.character?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = textColor.copy(alpha = 0.5f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(end = 24.dp)
+    ) {
+        items(videos.take(6), key = { it.key }) { video ->
+            TrailerCard(video, accentColor, textColor)
+        }
+    }
+}
+
+@Composable
+private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
+
+    Column(
+        modifier = Modifier
+            .width(190.dp)
+            .scale(scale)
+            .focusable(interactionSource = interactionSource)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(107.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(0.06f))
+                .border(
+                    width = if (isFocused) 2.dp else 0.dp,
+                    color = if (isFocused) accentColor else Color.Transparent,
+                    shape = RoundedCornerShape(10.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = video.thumbnail,
+                contentDescription = video.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+            )
+            // Play icon overlay
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = Color.White.copy(0.9f),
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(0.5f))
+                    .padding(4.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = video.name,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = if (isFocused) Color.White else textColor.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(end = 24.dp)
+    ) {
+        items(studios, key = { "${it.tmdbId}:${it.name}" }) { studio ->
+            StudioChip(studio, textColor)
+        }
+    }
+}
+
+@Composable
+private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(0.06f))
+            .padding(horizontal = 10.dp)
+    ) {
+        if (studio.logo != null) {
+            AsyncImage(
+                model = studio.logo,
+                contentDescription = studio.name,
+                modifier = Modifier.height(20.dp).widthIn(max = 60.dp),
+                contentScale = ContentScale.Fit
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = studio.name,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+            color = textColor.copy(alpha = 0.7f),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(end = 24.dp)
+    ) {
+        items(items, key = { it.tmdbId }) { item ->
+            RecommendationCard(item, accentColor)
+        }
+    }
+}
+
+@Composable
+private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
+
+    Box(
+        modifier = Modifier
+            .width(120.dp)
+            .height(180.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(0.06f))
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) accentColor else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .focusable(interactionSource = interactionSource)
+    ) {
+        if (item.poster != null) {
+            AsyncImage(
+                model = item.poster,
+                contentDescription = item.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+            )
+        }
+    }
 }
 
 private fun extractPrimaryYear(releaseInfo: String?): String {
