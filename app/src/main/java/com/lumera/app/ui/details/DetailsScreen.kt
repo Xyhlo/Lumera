@@ -73,9 +73,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Rect
+import kotlinx.coroutines.launch
 import com.lumera.app.R
 import com.lumera.app.data.tmdb.TmdbCastInfo
 import com.lumera.app.data.tmdb.TmdbCompanyInfo
@@ -158,30 +163,59 @@ fun DetailsScreen(
     }
 
     val firstButtonFocusRequester = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    LaunchedEffect(showMovieContent) {
-        if (showMovieContent) {
+    val tmdbPending = state.tmdbEnabled && state.tmdbLoading
+    val contentReady = showMovieContent && !tmdbPending
+
+    // Suppress auto-scroll when hero children get focus
+    @OptIn(ExperimentalFoundationApi::class)
+    val heroNoScrollResponder = remember {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) { }
+        }
+    }
+
+    // For nested horizontal rows — prevent vertical scroll but keep focus traversal
+    @OptIn(ExperimentalFoundationApi::class)
+    val noVerticalScrollResponder = remember {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect = localRect
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) { }
+        }
+    }
+
+    // Scroll back to hero when hero buttons get focus
+    val onHeroButtonFocused: () -> Unit = remember(listState) {
+        {
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+                coroutineScope.launch { listState.animateScrollToItem(0) }
+            }
+        }
+    }
+
+    LaunchedEffect(contentReady) {
+        if (contentReady) {
             kotlinx.coroutines.delay(200)
             runCatching { firstButtonFocusRequester.requestFocus() }
         }
     }
 
-    val tmdbPending = state.tmdbEnabled && state.tmdbLoading
-
     Box(modifier = Modifier.fillMaxSize().background(bg)) {
-        if (!showMovieContent) {
+        if (!showMovieContent || tmdbPending) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = accentColor)
-        } else {
+        }
+        if (showMovieContent && !tmdbPending) {
             val currentMovie = requireNotNull(movie)
             val bgImage = currentMovie.background ?: currentMovie.poster
-            if (!tmdbPending) {
-                AsyncImage(
-                    model = bgImage,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().alpha(0.6f)
-                )
-            }
+            AsyncImage(
+                model = bgImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().alpha(0.6f)
+            )
 
             Box(
                 modifier = Modifier
@@ -206,65 +240,62 @@ fun DetailsScreen(
             )
             com.lumera.app.ui.components.NoiseOverlay()
 
-            val scrollState = rememberScrollState()
             val enrichment = state.tmdbEnrichment
             val hasEnrichment = enrichment != null
 
+            @OptIn(ExperimentalFoundationApi::class)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+            // ── Hero item (fixed 540dp height, scroll-suppressed) ──
+            item(key = "hero", contentType = "hero") {
+            Box(modifier = Modifier.bringIntoViewResponder(heroNoScrollResponder)) {
             Column(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .width(if (hasEnrichment) 650.dp else 600.dp)
-                    .verticalScroll(scrollState)
-                    .padding(48.dp),
-                verticalArrangement = if (hasEnrichment) Arrangement.Top else Arrangement.Center
+                    .fillMaxWidth()
+                    .height(540.dp)
+                    .padding(start = 48.dp, end = 48.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.Bottom
             ) {
-                if (hasEnrichment) Spacer(modifier = Modifier.height(80.dp))
                 val titleStyle = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 32.sp,
                     lineHeight = 34.sp
                 )
 
-                if (!tmdbPending) {
-                    if (!currentMovie.logo.isNullOrEmpty()) {
-                        SubcomposeAsyncImage(
-                            model = currentMovie.logo,
-                            contentDescription = currentMovie.name,
-                            contentScale = ContentScale.Fit,
-                            alignment = Alignment.BottomStart,
-                            modifier = Modifier
-                                .widthIn(max = 450.dp)
-                                .heightIn(max = 90.dp),
-                            error = {
-                                Text(
-                                    text = currentMovie.name,
-                                    style = titleStyle,
-                                    color = textColor,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    softWrap = true
-                                )
-                            }
-                        )
-                    } else {
-                        Text(
-                            text = currentMovie.name,
-                            style = titleStyle,
-                            color = textColor,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            softWrap = true
-                        )
-                    }
+                if (!currentMovie.logo.isNullOrEmpty()) {
+                    SubcomposeAsyncImage(
+                        model = currentMovie.logo,
+                        contentDescription = currentMovie.name,
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.BottomStart,
+                        modifier = Modifier
+                            .widthIn(max = 450.dp)
+                            .heightIn(max = 90.dp),
+                        error = {
+                            Text(
+                                text = currentMovie.name,
+                                style = titleStyle,
+                                color = textColor,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = true
+                            )
+                        }
+                    )
+                } else {
+                    Text(
+                        text = currentMovie.name,
+                        style = titleStyle,
+                        color = textColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = true
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // Hide text metadata while TMDB is loading to prevent flash of addon data
-                if (tmdbPending) {
-                    // Show subtle loading placeholder
-                    Spacer(modifier = Modifier.height(20.dp))
-                } else {
 
                 val typeLabel = currentMovie.type.replaceFirstChar { it.uppercase() }
                 val genreLabel = currentMovie.genres
@@ -347,8 +378,6 @@ fun DetailsScreen(
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                } // end tmdbPending else
-
                 val firstEpisode = remember(currentMovie.id, currentMovie.videos) {
                     findFirstEpisode(currentMovie.videos)
                 }
@@ -390,7 +419,7 @@ fun DetailsScreen(
                         VoidActionButton(
                             label = playLabel,
                             icon = Icons.Default.PlayArrow,
-                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
+                            modifier = Modifier.focusRequester(firstButtonFocusRequester).onFocusChanged { if (it.isFocused) onHeroButtonFocused() },
                             onClick = {
                                 val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
                                 val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
@@ -434,7 +463,7 @@ fun DetailsScreen(
                         VoidActionButton(
                             label = if (resumePlaybackId != null) "Resume" else "Play Movie",
                             icon = Icons.Default.PlayArrow,
-                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
+                            modifier = Modifier.focusRequester(firstButtonFocusRequester).onFocusChanged { if (it.isFocused) onHeroButtonFocused() },
                             onClick = {
                                 pendingPlaybackId = streamId
                                 pendingPlaybackType = type
@@ -470,85 +499,103 @@ fun DetailsScreen(
                         }
                     }
                 }
-
-                // ── TMDB Enrichment Sections ──
-                if (hasEnrichment) {
-                    val castMembers = enrichment?.castMembers.orEmpty()
-                    val directorMembers = enrichment?.directorMembers.orEmpty()
-                    val writerMembers = enrichment?.writerMembers.orEmpty()
-                    val companies = enrichment?.productionCompanies.orEmpty()
-                    val networks = enrichment?.networks.orEmpty()
-                    val videos = state.tmdbVideos
-                    val recommendations = state.tmdbRecommendations
-                    val collection = state.tmdbCollection
-
-                    // Director / Creator
-                    if (directorMembers.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        val label = directorMembers.first().character ?: "Director"
-                        Text(
-                            text = "$label: ${directorMembers.joinToString { it.name }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = textColor.copy(alpha = 0.7f)
-                        )
-                    }
-                    // Writer
-                    if (writerMembers.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Writer: ${writerMembers.joinToString { it.name }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = textColor.copy(alpha = 0.7f)
-                        )
-                    }
-
-                    // Cast
-                    if (castMembers.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(28.dp))
-                        SectionHeader("Cast", textColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        CastRow(castMembers, accentColor, textColor)
-                    }
-
-                    // Trailers
-                    if (videos.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(28.dp))
-                        SectionHeader("Trailers", textColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        TrailerRow(videos, accentColor, textColor)
-                    }
-
-                    // Studios & Networks
-                    val allStudios = companies + networks.map {
-                        TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId)
-                    }
-                    if (allStudios.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(28.dp))
-                        SectionHeader("Studios", textColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        StudioRow(allStudios, textColor)
-                    }
-
-                    // More Like This
-                    if (recommendations.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(28.dp))
-                        SectionHeader("More Like This", textColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        RecommendationRow(recommendations, accentColor)
-                    }
-
-                    // Collection
-                    val collectionName = state.tmdbCollectionName
-                    if (collection.isNotEmpty() && collectionName != null) {
-                        Spacer(modifier = Modifier.height(28.dp))
-                        SectionHeader(collectionName, textColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        RecommendationRow(collection, accentColor)
-                    }
-
-                    Spacer(modifier = Modifier.height(48.dp))
-                }
             }
+            } // Box heroNoScrollResponder
+            } // hero item
+
+            // ── TMDB Enrichment Sections ──
+            if (hasEnrichment) {
+                val castMembers = enrichment?.castMembers.orEmpty()
+                val directorMembers = enrichment?.directorMembers.orEmpty()
+                val writerMembers = enrichment?.writerMembers.orEmpty()
+                val companies = enrichment?.productionCompanies.orEmpty()
+                val networks = enrichment?.networks.orEmpty()
+                val tmdbVideos = state.tmdbVideos
+                val tmdbRecommendations = state.tmdbRecommendations
+                val tmdbCollection = state.tmdbCollection
+
+                if (directorMembers.isNotEmpty() || writerMembers.isNotEmpty()) {
+                    item(key = "tmdb_crew") {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 16.dp)) {
+                            if (directorMembers.isNotEmpty()) {
+                                val label = directorMembers.first().character ?: "Director"
+                                Text(text = "$label: ${directorMembers.joinToString { it.name }}", style = MaterialTheme.typography.bodyMedium, color = textColor.copy(alpha = 0.7f))
+                            }
+                            if (writerMembers.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "Writer: ${writerMembers.joinToString { it.name }}", style = MaterialTheme.typography.bodyMedium, color = textColor.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+                }
+
+                if (castMembers.isNotEmpty()) {
+                    item(key = "tmdb_cast") {
+                        @OptIn(ExperimentalFoundationApi::class)
+                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
+                            SectionHeader("Cast", textColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            CastRow(castMembers, accentColor, textColor)
+                        }
+                        }
+                    }
+                }
+
+                if (tmdbVideos.isNotEmpty()) {
+                    item(key = "tmdb_trailers") {
+                        @OptIn(ExperimentalFoundationApi::class)
+                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
+                            SectionHeader("Trailers", textColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            TrailerRow(tmdbVideos, accentColor, textColor)
+                        }
+                        }
+                    }
+                }
+
+                val allStudios = companies + networks.map { TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId) }
+                if (allStudios.isNotEmpty()) {
+                    item(key = "tmdb_studios") {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
+                            SectionHeader("Studios", textColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            StudioRow(allStudios, textColor)
+                        }
+                    }
+                }
+
+                if (tmdbRecommendations.isNotEmpty()) {
+                    item(key = "tmdb_recs") {
+                        @OptIn(ExperimentalFoundationApi::class)
+                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
+                            SectionHeader("More Like This", textColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            RecommendationRow(tmdbRecommendations, accentColor)
+                        }
+                        }
+                    }
+                }
+
+                val collectionName = state.tmdbCollectionName
+                if (tmdbCollection.isNotEmpty() && collectionName != null) {
+                    item(key = "tmdb_collection") {
+                        @OptIn(ExperimentalFoundationApi::class)
+                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
+                        Column(modifier = Modifier.padding(start = 48.dp, top = 28.dp)) {
+                            SectionHeader(collectionName, textColor)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            RecommendationRow(tmdbCollection, accentColor)
+                        }
+                        }
+                    }
+                }
+
+                item(key = "tmdb_spacer") { Spacer(modifier = Modifier.height(48.dp)) }
+            }
+            } // LazyColumn
         }
 
         GlassSidebar(
