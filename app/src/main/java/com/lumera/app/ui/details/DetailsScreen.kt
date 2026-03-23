@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -38,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -560,13 +562,12 @@ fun DetailsScreen(
 
                 if (castMembers.isNotEmpty()) {
                     item(key = "tmdb_cast") {
-                        val castPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Cast", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            CastRow(castMembers, accentColor, textColor, firstItemRequester = castPivot)
+                            CastRow(castMembers, accentColor, textColor)
                         }
                         }
                     }
@@ -574,13 +575,12 @@ fun DetailsScreen(
 
                 if (tmdbVideos.isNotEmpty()) {
                     item(key = "tmdb_trailers") {
-                        val trailerPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            TrailerRow(tmdbVideos, accentColor, textColor, firstItemRequester = trailerPivot)
+                            TrailerRow(tmdbVideos, accentColor, textColor)
                         }
                         }
                     }
@@ -599,13 +599,12 @@ fun DetailsScreen(
 
                 if (tmdbRecommendations.isNotEmpty()) {
                     item(key = "tmdb_recs") {
-                        val recsPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("More Like This", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbRecommendations, accentColor, firstItemRequester = recsPivot)
+                            RecommendationRow(tmdbRecommendations, accentColor)
                         }
                         }
                     }
@@ -614,13 +613,12 @@ fun DetailsScreen(
                 val collectionName = state.tmdbCollectionName
                 if (tmdbCollection.isNotEmpty() && collectionName != null) {
                     item(key = "tmdb_collection") {
-                        val collPivot = remember { FocusRequester() }
                         @OptIn(ExperimentalFoundationApi::class)
                         Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(collectionName, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbCollection, accentColor, firstItemRequester = collPivot)
+                            RecommendationRow(tmdbCollection, accentColor)
                         }
                         }
                     }
@@ -756,8 +754,10 @@ private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = 
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
     val rowState = rememberLazyListState()
+    val pivotRequester = remember { FocusRequester() }
+    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -768,7 +768,7 @@ private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Col
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
         Box(modifier = Modifier
             .focusGroup()
-            .focusProperties { enter = { firstItemRequester } }
+            .focusProperties { enter = { pivotRequester } }
         ) {
         LazyRow(
             state = rowState,
@@ -777,12 +777,12 @@ private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Col
         ) {
             itemsIndexed(cast.take(20), key = { _, it -> it.tmdbId ?: it.name }) { index, member ->
                 Box(modifier = Modifier
-                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
                     .onPreviewKeyEvent {
                         if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                     }
                 ) {
-                    CastCard(member, accentColor, textColor)
+                    CastCard(member, accentColor, textColor, onFocused = { lastFocusedIndex = index })
                 }
             }
         }
@@ -792,10 +792,11 @@ private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Col
 
 
 @Composable
-private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color) {
+private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color, onFocused: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "castScale")
+    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -846,8 +847,10 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color)
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color) {
     val rowState = rememberLazyListState()
+    val pivotRequester = remember { FocusRequester() }
+    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -858,7 +861,7 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
         Box(modifier = Modifier
             .focusGroup()
-            .focusProperties { enter = { firstItemRequester } }
+            .focusProperties { enter = { pivotRequester } }
         ) {
         LazyRow(
             state = rowState,
@@ -867,12 +870,12 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
         ) {
             itemsIndexed(videos.take(6), key = { _, it -> it.key }) { index, video ->
                 Box(modifier = Modifier
-                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
                     .onPreviewKeyEvent {
                         if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                     }
                 ) {
-                    TrailerCard(video, accentColor, textColor)
+                    TrailerCard(video, accentColor, textColor, onFocused = { lastFocusedIndex = index })
                 }
             }
         }
@@ -881,10 +884,11 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
 }
 
 @Composable
-private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color) {
+private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, onFocused: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
+    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Column(
         modifier = Modifier
@@ -976,8 +980,10 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color) {
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, firstItemRequester: FocusRequester = remember { FocusRequester() }) {
+private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) {
     val rowState = rememberLazyListState()
+    val pivotRequester = remember { FocusRequester() }
+    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -988,7 +994,7 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, 
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
         Box(modifier = Modifier
             .focusGroup()
-            .focusProperties { enter = { firstItemRequester } }
+            .focusProperties { enter = { pivotRequester } }
         ) {
         LazyRow(
             state = rowState,
@@ -997,12 +1003,12 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, 
         ) {
             itemsIndexed(items, key = { _, it -> it.tmdbId }) { index, item ->
                 Box(modifier = Modifier
-                    .then(if (index == 0) Modifier.focusRequester(firstItemRequester) else Modifier)
+                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
                     .onPreviewKeyEvent {
                         if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                     }
                 ) {
-                    RecommendationCard(item, accentColor)
+                    RecommendationCard(item, accentColor, onFocused = { lastFocusedIndex = index })
                 }
             }
         }
@@ -1011,10 +1017,11 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, 
 }
 
 @Composable
-private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color) {
+private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, onFocused: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
+    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Box(
         modifier = Modifier
