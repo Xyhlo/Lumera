@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.auth.StremioAuthManager
 import com.lumera.app.data.auth.StremioConnectionState
 import com.lumera.app.data.model.StremioAddonItem
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.remote.StremioAuthError
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,7 +34,8 @@ data class IntegrationsUiState(
 @HiltViewModel
 class IntegrationsViewModel @Inject constructor(
     private val stremioAuthManager: StremioAuthManager,
-    private val addonRepository: AddonRepository
+    private val addonRepository: AddonRepository,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IntegrationsUiState())
@@ -164,6 +166,7 @@ class IntegrationsViewModel @Inject constructor(
                 }
             }
 
+            profileConfigurationManager.saveActiveRuntimeState()
             _uiState.value = _uiState.value.copy(isLoading = false)
             _events.send(IntegrationsEvent.SyncComplete(successCount))
         }

@@ -3,6 +3,7 @@ package com.lumera.app.ui.addons
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.model.AddonEntity
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -27,8 +28,13 @@ data class AddonInstallConfig(
 
 @HiltViewModel
 class AddonsViewModel @Inject constructor(
-    private val repository: AddonRepository
+    private val repository: AddonRepository,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
+
+    private fun persistProfileState() {
+        viewModelScope.launch { profileConfigurationManager.saveActiveRuntimeState() }
+    }
 
     data class UiState(
         val addons: List<AddonEntity> = emptyList(),
@@ -89,6 +95,7 @@ class AddonsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, pendingInstall = null)
             try {
                 repository.installAddonWithConfig(url, home, movies, series)
+                persistProfileState()
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 _events.send(AddonEvent.InstallationSuccess)
             } catch (e: Exception) {
@@ -101,8 +108,8 @@ class AddonsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(pendingInstall = null)
     }
 
-    fun deleteAddon(transportUrl: String) { viewModelScope.launch { repository.deleteAddon(transportUrl) } }
-    fun renameAddon(transportUrl: String, newName: String) { viewModelScope.launch { repository.renameAddon(transportUrl, newName) } }
+    fun deleteAddon(transportUrl: String) { viewModelScope.launch { repository.deleteAddon(transportUrl); persistProfileState() } }
+    fun renameAddon(transportUrl: String, newName: String) { viewModelScope.launch { repository.renameAddon(transportUrl, newName); persistProfileState() } }
 
     fun moveAddon(addon: AddonEntity, direction: Int) {
         val currentList = _uiState.value.addons.toMutableList()
@@ -114,6 +121,6 @@ class AddonsViewModel @Inject constructor(
         Collections.swap(currentList, index, newIndex)
         val updated = currentList.mapIndexed { i, item -> item.copy(sortOrder = i) }
         _uiState.value = _uiState.value.copy(addons = updated)
-        viewModelScope.launch { repository.updateAddons(updated) }
+        viewModelScope.launch { repository.updateAddons(updated); persistProfileState() }
     }
 }

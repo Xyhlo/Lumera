@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.CatalogConfigEntity
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.model.HubRowEntity
 import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.data.model.HubRowWithItems
@@ -59,8 +60,13 @@ sealed interface DialogState {
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
+
+    private fun persistProfileState() {
+        viewModelScope.launch { profileConfigurationManager.saveActiveRuntimeState() }
+    }
 
     private val _configs = MutableStateFlow<List<CatalogConfigEntity>>(emptyList())
     val configs: StateFlow<List<CatalogConfigEntity>> = _configs
@@ -84,6 +90,7 @@ class DashboardViewModel @Inject constructor(
     fun renameCatalog(config: CatalogConfigEntity, newName: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.saveCatalogConfig(config.copy(customTitle = newName))
+            persistProfileState()
         }
     }
 
@@ -115,6 +122,7 @@ class DashboardViewModel @Inject constructor(
                     dao.updateHubRow(updated)
                 }
             }
+            persistProfileState()
         }
     }
 
@@ -142,6 +150,7 @@ class DashboardViewModel @Inject constructor(
                     dao.updateHubRow(updated)
                 }
             }
+            persistProfileState()
         }
     }
 
@@ -184,6 +193,7 @@ class DashboardViewModel @Inject constructor(
             viewModelScope.launch(Dispatchers.IO + NonCancellable) {
                 if (updatedHubs.isNotEmpty()) dao.updateHubRows(updatedHubs)
                 if (updatedConfigs.isNotEmpty()) dao.saveCatalogConfigs(updatedConfigs)
+                persistProfileState()
             }
         }
     }
@@ -202,6 +212,7 @@ class DashboardViewModel @Inject constructor(
                     isInfiniteScrollingEnabled = isInfiniteScrollingEnabled
                 )
             )
+            persistProfileState()
         }
     }
 
@@ -235,14 +246,14 @@ class DashboardViewModel @Inject constructor(
                 )
             }
             dao.insertHubRowWithItems(hubRow, hubItems)
+            persistProfileState()
         }
     }
-
-
 
     fun deleteHubRow(hubRowId: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.deleteHubRowWithItems(hubRowId)
+            persistProfileState()
         }
     }
 
@@ -250,6 +261,7 @@ class DashboardViewModel @Inject constructor(
         val currentHub = _hubRows.value.find { it.hub.id == hubRowId }?.hub ?: return
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.updateHubRow(currentHub.copy(title = newTitle))
+            persistProfileState()
         }
     }
 
@@ -257,6 +269,7 @@ class DashboardViewModel @Inject constructor(
         val currentHub = _hubRows.value.find { it.hub.id == hubRowId }?.hub ?: return
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.updateHubRow(currentHub.copy(shape = shape.name))
+            persistProfileState()
         }
     }
 
@@ -270,18 +283,21 @@ class DashboardViewModel @Inject constructor(
                 itemOrder = maxOrder + 1
             )
             dao.insertHubRowItem(item)
+            persistProfileState()
         }
     }
 
     fun removeCategoryFromHubRow(hubRowId: String, configUniqueId: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.deleteHubRowItem(hubRowId, configUniqueId)
+            persistProfileState()
         }
     }
 
     fun updateHubItemImage(hubRowId: String, configUniqueId: String, imageUrl: String?) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.updateHubItemImage(hubRowId, configUniqueId, imageUrl)
+            persistProfileState()
         }
     }
 
@@ -290,6 +306,7 @@ class DashboardViewModel @Inject constructor(
             val currentItems = _hubRows.value.find { it.hub.id == hubRowId }?.items ?: return@launch
             val item = currentItems.find { it.configUniqueId == configUniqueId } ?: return@launch
             dao.updateHubRowItem(item.copy(title = newTitle))
+            persistProfileState()
         }
     }
 
@@ -299,6 +316,7 @@ class DashboardViewModel @Inject constructor(
                 item.copy(hubRowId = hubRowId, itemOrder = index)
             }
             dao.updateHubRowItems(updatedItems)
+            persistProfileState()
         }
     }
 
