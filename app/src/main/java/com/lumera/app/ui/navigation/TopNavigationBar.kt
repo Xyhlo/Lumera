@@ -130,7 +130,7 @@ fun TopNavigationBar(
                                 1.0f to Color.Transparent
                             ),
                             startY = 0f,
-                            endY = 400f
+                            endY = 180f
                         )
                     )
             )
@@ -161,7 +161,7 @@ fun TopNavigationBar(
                                 1.0f to Color.Transparent
                             ),
                             startY = 0f,
-                            endY = 600f
+                            endY = 400f
                         )
                     )
             )

@@ -124,7 +124,7 @@ fun NavDrawer(
                                 1.0f to Color.Transparent
                             ),
                             startX = 0f,
-                            endX = 700f
+                            endX = 350f
                         )
                     )
             )
@@ -154,7 +154,7 @@ fun NavDrawer(
                                 1.0f to Color.Transparent
                             ),
                             startX = 0f,
-                            endX = 1500f
+                            endX = 900f
                         )
                     )
             )
