@@ -324,6 +324,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val profile = dao.getProfileById(profileId) ?: return@launch
             dao.insertProfile(profile.withLayout(tab, layout))
+            persistProfileState()
         }
     }
 
@@ -331,6 +332,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val profile = dao.getProfileById(profileId) ?: return@launch
             dao.insertProfile(profile.withHero(tab, config))
+            persistProfileState()
         }
     }
 
