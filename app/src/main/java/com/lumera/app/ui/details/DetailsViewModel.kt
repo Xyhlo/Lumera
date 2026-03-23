@@ -200,8 +200,12 @@ class DetailsViewModel @Inject constructor(
                 val language = profile.tmdbLanguage.ifBlank { null } ?: "en"
                 val mediaType = tmdbService.normalizeMediaType(type)
 
-                // Resolve TMDB ID
-                val tmdbId = tmdbService.ensureTmdbId(videoId, mediaType) ?: return@launch
+                // Resolve TMDB ID — if unresolvable (e.g. Kitsu IDs), stop loading and show addon data
+                val tmdbId = tmdbService.ensureTmdbId(videoId, mediaType)
+                if (tmdbId == null) {
+                    _state.value = _state.value.copy(tmdbLoading = false)
+                    return@launch
+                }
 
                 // Fetch enrichment, recommendations, and videos in parallel
                 val enrichmentDeferred = async { tmdbMetadataService.fetchEnrichment(tmdbId, mediaType, language) }

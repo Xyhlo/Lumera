@@ -407,9 +407,17 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val mediaType = tmdbService.normalizeMediaType(item.type)
-                val tmdbId = tmdbService.ensureTmdbId(item.id, mediaType) ?: return@launch
+                val tmdbId = tmdbService.ensureTmdbId(item.id, mediaType)
+                if (tmdbId == null) {
+                    // Can't resolve (e.g. Kitsu IDs) — mark as done so UI doesn't stay hidden
+                    markTmdbEnriched(item.type, item.id)
+                    return@launch
+                }
                 val enrichment = tmdbMetadataService.fetchEnrichment(tmdbId, mediaType, language)
-                    ?: return@launch
+                if (enrichment == null) {
+                    markTmdbEnriched(item.type, item.id)
+                    return@launch
+                }
 
                 val fallback = MetadataFallback(
                     poster = null, // Keep addon poster
@@ -425,10 +433,16 @@ class HomeViewModel @Inject constructor(
                 applyTmdbEnrichmentToState(item.type, item.id, fallback)
             } catch (e: Exception) {
                 Log.w("HomeViewModel", "TMDB enrichment failed for ${item.id}: ${e.message}")
+                markTmdbEnriched(item.type, item.id)
             } finally {
                 tmdbEnrichmentInFlight.remove(key)
             }
         }
+    }
+
+    private fun markTmdbEnriched(type: String, id: String) {
+        val current = _state.value
+        _state.value = current.copy(tmdbEnrichedIds = current.tmdbEnrichedIds + "$type:$id")
     }
 
     /**
