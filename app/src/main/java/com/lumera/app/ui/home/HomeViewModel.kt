@@ -1,16 +1,20 @@
 package com.lumera.app.ui.home
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.repository.AddonRepository
+import com.lumera.app.data.tmdb.TmdbMetadataService
+import com.lumera.app.data.tmdb.TmdbService
 import com.lumera.app.domain.HomeRow
 import com.lumera.app.domain.HubGroupRow
 import com.lumera.app.ui.utils.ImagePrefetcher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +31,9 @@ import com.lumera.app.domain.heroFor
 class HomeViewModel @Inject constructor(
     private val repository: AddonRepository,
     private val dao: AddonDao,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val tmdbService: TmdbService,
+    private val tmdbMetadataService: TmdbMetadataService
 ) : ViewModel() {
 
     private var loadJob: kotlinx.coroutines.Job? = null
@@ -51,7 +57,9 @@ class HomeViewModel @Inject constructor(
         val verticalScrollPosition: Pair<Int, Int> = Pair(0, 0),
         val heroRow: HomeRow? = null,
         val loadedProfileId: Int? = null,
-        val enrichedMeta: Map<String, MetaItem> = emptyMap()
+        val enrichedMeta: Map<String, MetaItem> = emptyMap(),
+        val tmdbEnabled: Boolean = false,
+        val tmdbEnrichedIds: Set<String> = emptySet()
     )
 
     private val _state = MutableStateFlow(HomeState())
@@ -379,6 +387,101 @@ class HomeViewModel @Inject constructor(
         )
     }
 
+    private val tmdbEnrichmentInFlight = mutableSetOf<String>()
+    private var tmdbProfileCache: com.lumera.app.data.model.ProfileEntity? = null
+
+    /**
+     * Enriches a single item with TMDB metadata. Called for every item as it becomes visible,
+     * piggybacking on the existing ensureMetadataFallback flow.
+     */
+    fun ensureTmdbEnrichment(item: MetaItem?) {
+        if (item == null) return
+        val profile = tmdbProfileCache ?: return
+        if (!profile.tmdbEnabled) return
+
+        val key = "tmdb:${item.type}:${item.id}"
+        if (!tmdbEnrichmentInFlight.add(key)) return
+
+        val language = profile.tmdbLanguage.ifBlank { null } ?: "en"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val mediaType = tmdbService.normalizeMediaType(item.type)
+                val tmdbId = tmdbService.ensureTmdbId(item.id, mediaType) ?: return@launch
+                val enrichment = tmdbMetadataService.fetchEnrichment(tmdbId, mediaType, language)
+                    ?: return@launch
+
+                val fallback = MetadataFallback(
+                    poster = null, // Keep addon poster
+                    background = enrichment.backdrop,
+                    logo = enrichment.logo,
+                    description = enrichment.description,
+                    releaseInfo = enrichment.releaseInfo,
+                    imdbRating = enrichment.rating?.let { String.format("%.1f", it) },
+                    runtime = enrichment.runtimeMinutes?.let { "${it}m" },
+                    genres = enrichment.genres.ifEmpty { null }
+                )
+
+                applyTmdbEnrichmentToState(item.type, item.id, fallback)
+            } catch (e: Exception) {
+                Log.w("HomeViewModel", "TMDB enrichment failed for ${item.id}: ${e.message}")
+            } finally {
+                tmdbEnrichmentInFlight.remove(key)
+            }
+        }
+    }
+
+    /**
+     * Applies TMDB enrichment to state — overwrites fields (unlike addon fallback which only fills blanks).
+     * This ensures localized content from TMDB takes priority.
+     */
+    private fun applyTmdbEnrichmentToState(type: String, id: String, fallback: MetadataFallback) {
+        val current = _state.value
+        var stateChanged = false
+
+        fun overwriteMeta(meta: MetaItem): MetaItem {
+            if (meta.type != type || meta.id != id) return meta
+            // Keep addon poster — only enrich rich metadata fields
+            val updated = meta.copy(
+                background = fallback.background ?: meta.background,
+                logo = fallback.logo ?: meta.logo,
+                description = fallback.description ?: meta.description,
+                releaseInfo = fallback.releaseInfo ?: meta.releaseInfo,
+                imdbRating = fallback.imdbRating ?: meta.imdbRating,
+                runtime = fallback.runtime ?: meta.runtime,
+                genres = fallback.genres ?: meta.genres
+            )
+            if (updated != meta) stateChanged = true
+            return updated
+        }
+
+        val updatedRows = current.rows.map { row ->
+            val patched = row.items.map { overwriteMeta(it) }
+            if (stateChanged) row.copy(items = patched) else row
+        }
+
+        val updatedMixedRows = current.mixedRows.map { rowItem ->
+            if (rowItem is CategoryRow) {
+                val patched = rowItem.items.map { overwriteMeta(it) }
+                if (stateChanged) rowItem.copy(items = patched) else rowItem
+            } else rowItem
+        }
+
+        val updatedHeroRow = current.heroRow?.let { hero ->
+            val patched = hero.items.map { overwriteMeta(it) }
+            if (stateChanged) hero.copy(items = patched) else hero
+        }
+
+        if (!stateChanged) return
+
+        _state.value = current.copy(
+            rows = updatedRows,
+            mixedRows = updatedMixedRows,
+            heroRow = updatedHeroRow,
+            tmdbEnrichedIds = current.tmdbEnrichedIds + "$type:$id"
+        )
+    }
+
     fun loadScreen(screenName: String, currentProfile: com.lumera.app.data.model.ProfileEntity?) {
         val currentProfileId = currentProfile?.id
         // ... (existing code)
@@ -469,6 +572,10 @@ class HomeViewModel @Inject constructor(
 
                 // Start a tiny metadata warmup pass for items likely to render first.
                 prefetchLikelyVisibleMetadata(rows = initialRows, heroRow = heroRow)
+
+                // Cache profile for TMDB enrichment (called per-item as they become visible)
+                tmdbProfileCache = currentProfile
+                _state.value = _state.value.copy(tmdbEnabled = currentProfile?.tmdbEnabled == true)
 
                 // Stage 2: Load remaining categories in the background and append.
                 launch {

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
@@ -60,7 +61,9 @@ fun HeroCarousel(
     upKeyDebouncer: UpKeyDebouncer? = null,
     repeatGate: DpadRepeatGate? = null,
     onNavigateDown: (() -> Unit)? = null,
-    restoreItemId: String? = null
+    restoreItemId: String? = null,
+    tmdbEnabled: Boolean = false,
+    tmdbEnrichedIds: Set<String> = emptySet()
 ) {
     if (items.isEmpty()) return
 
@@ -214,8 +217,9 @@ fun HeroCarousel(
             transitionSpec = { fadeIn(tween(500)).togetherWith(fadeOut(tween(300))) },
             label = "hero_bg"
         ) { item ->
+            val bgReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
             val imageUrl = item.background ?: item.poster
-            if (imageUrl != null) {
+            if (imageUrl != null && bgReady) {
                 val context = LocalContext.current
                 val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
                 val request = remember(imageUrl) {
@@ -271,7 +275,9 @@ fun HeroCarousel(
                 transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
                 label = "hero_info"
             ) { item ->
-                Column {
+                // Hide info content while waiting for TMDB enrichment to prevent addon data flash
+                val itemReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
+                Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
                     Box(
                         modifier = Modifier
                             .width(600.dp)

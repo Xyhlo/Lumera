@@ -166,18 +166,22 @@ fun DetailsScreen(
         }
     }
 
+    val tmdbPending = state.tmdbEnabled && state.tmdbLoading
+
     Box(modifier = Modifier.fillMaxSize().background(bg)) {
         if (!showMovieContent) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = accentColor)
         } else {
             val currentMovie = requireNotNull(movie)
             val bgImage = currentMovie.background ?: currentMovie.poster
-            AsyncImage(
-                model = bgImage,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().alpha(0.6f)
-            )
+            if (!tmdbPending) {
+                AsyncImage(
+                    model = bgImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().alpha(0.6f)
+                )
+            }
 
             Box(
                 modifier = Modifier
@@ -221,38 +225,46 @@ fun DetailsScreen(
                     lineHeight = 34.sp
                 )
 
-                if (!currentMovie.logo.isNullOrEmpty()) {
-                    SubcomposeAsyncImage(
-                        model = currentMovie.logo,
-                        contentDescription = currentMovie.name,
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.BottomStart,
-                        modifier = Modifier
-                            .widthIn(max = 450.dp)
-                            .heightIn(max = 90.dp),
-                        error = {
-                            Text(
-                                text = currentMovie.name,
-                                style = titleStyle,
-                                color = textColor,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                softWrap = true
-                            )
-                        }
-                    )
-                } else {
-                    Text(
-                        text = currentMovie.name,
-                        style = titleStyle,
-                        color = textColor,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = true
-                    )
+                if (!tmdbPending) {
+                    if (!currentMovie.logo.isNullOrEmpty()) {
+                        SubcomposeAsyncImage(
+                            model = currentMovie.logo,
+                            contentDescription = currentMovie.name,
+                            contentScale = ContentScale.Fit,
+                            alignment = Alignment.BottomStart,
+                            modifier = Modifier
+                                .widthIn(max = 450.dp)
+                                .heightIn(max = 90.dp),
+                            error = {
+                                Text(
+                                    text = currentMovie.name,
+                                    style = titleStyle,
+                                    color = textColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = true
+                                )
+                            }
+                        )
+                    } else {
+                        Text(
+                            text = currentMovie.name,
+                            style = titleStyle,
+                            color = textColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = true
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Hide text metadata while TMDB is loading to prevent flash of addon data
+                if (tmdbPending) {
+                    // Show subtle loading placeholder
+                    Spacer(modifier = Modifier.height(20.dp))
+                } else {
 
                 val typeLabel = currentMovie.type.replaceFirstChar { it.uppercase() }
                 val genreLabel = currentMovie.genres
@@ -334,6 +346,8 @@ fun DetailsScreen(
                     maxLines = 5
                 )
                 Spacer(modifier = Modifier.height(32.dp))
+
+                } // end tmdbPending else
 
                 val firstEpisode = remember(currentMovie.id, currentMovie.videos) {
                     findFirstEpisode(currentMovie.videos)

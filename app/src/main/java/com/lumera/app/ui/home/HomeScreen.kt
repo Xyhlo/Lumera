@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -176,7 +177,7 @@ fun HomeScreen(
                     onFocusChange = { viewModel.setLastFocusedKey(it) },
                     onScrollPositionChange = { key, pos -> viewModel.setRowScrollPosition(key, pos) },
                     onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, state.history.isNotEmpty()) },
-                    onPreviewItemVisible = { viewModel.ensureMetadataFallback(it) },
+                    onPreviewItemVisible = { viewModel.ensureMetadataFallback(it); viewModel.ensureTmdbEnrichment(it) },
                     isLandscapeContinueWatching = isLandscapeContinueWatching
                 )
             } else {
@@ -211,7 +212,7 @@ fun HomeScreen(
                     onFocusChange = { viewModel.setLastFocusedKey(it) },
                     onScrollPositionChange = { key, pos -> viewModel.setRowScrollPosition(key, pos) },
                     onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, state.history.isNotEmpty()) },
-                    onHeroItemVisible = { viewModel.ensureMetadataFallback(it) },
+                    onHeroItemVisible = { viewModel.ensureMetadataFallback(it); viewModel.ensureTmdbEnrichment(it) },
                     isLandscapeContinueWatching = isLandscapeContinueWatching
                 )
             }
@@ -361,7 +362,12 @@ fun CinematicLayout(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        CinematicBackground(renderedPreviewItem)
+        // Only show background when TMDB enrichment is done (or disabled) to prevent flash
+        val bgItem = if (!state.tmdbEnabled || renderedPreviewItem == null ||
+            state.tmdbEnrichedIds.contains("${renderedPreviewItem.type}:${renderedPreviewItem.id}")) {
+            renderedPreviewItem
+        } else null
+        CinematicBackground(bgItem)
 
         Column(modifier = Modifier.fillMaxSize().zIndex(2f)) {
             // INFO SECTION
@@ -378,7 +384,9 @@ fun CinematicLayout(
                     label = "Info"
                 ) { item ->
                     if (item != null) {
-                        Column {
+                        // Hide info content while waiting for TMDB enrichment
+                        val itemReady = !state.tmdbEnabled || state.tmdbEnrichedIds.contains("${item.type}:${item.id}")
+                        Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
                             Box(
                                 modifier = Modifier
                                     .width(700.dp)
@@ -955,7 +963,9 @@ fun SimpleLayout(
                         upKeyDebouncer = upKeyDebouncer,
                         repeatGate = dpadRepeatGate,
                         onNavigateDown = { firstRowPivotRequester.requestFocus() },
-                        restoreItemId = if (effectiveLastFocusedKey?.startsWith("hero_") == true) effectiveLastFocusedKey.removePrefix("hero_") else null
+                        restoreItemId = if (effectiveLastFocusedKey?.startsWith("hero_") == true) effectiveLastFocusedKey.removePrefix("hero_") else null,
+                        tmdbEnabled = state.tmdbEnabled,
+                        tmdbEnrichedIds = state.tmdbEnrichedIds
                     )
                 }
             }

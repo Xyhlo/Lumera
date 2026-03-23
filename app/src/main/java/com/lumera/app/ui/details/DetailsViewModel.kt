@@ -58,6 +58,8 @@ class DetailsViewModel @Inject constructor(
         val sidebarState: SidebarState = SidebarState.Closed,
         val progressCleared: Boolean = false,
         // TMDB enrichment
+        val tmdbEnabled: Boolean = false,
+        val tmdbLoading: Boolean = false,
         val tmdbEnrichment: TmdbEnrichment? = null,
         val tmdbRecommendations: List<TmdbMetaPreview> = emptyList(),
         val tmdbVideos: List<TmdbVideoInfo> = emptyList(),
@@ -188,7 +190,12 @@ class DetailsViewModel @Inject constructor(
                 // Check if TMDB is enabled for the active profile
                 val profileId = profileConfigurationManager.getLastActiveProfileId()
                 val profile = profileId?.let { dao.getProfileById(it) }
-                if (profile?.tmdbEnabled != true) return@launch
+                if (profile?.tmdbEnabled != true) {
+                    _state.value = _state.value.copy(tmdbEnabled = false, tmdbLoading = false)
+                    return@launch
+                }
+
+                _state.value = _state.value.copy(tmdbEnabled = true, tmdbLoading = true)
 
                 val language = profile.tmdbLanguage.ifBlank { null } ?: "en"
                 val mediaType = tmdbService.normalizeMediaType(type)
@@ -240,6 +247,7 @@ class DetailsViewModel @Inject constructor(
 
                 _state.value = _state.value.copy(
                     meta = enrichedMeta,
+                    tmdbLoading = false,
                     tmdbEnrichment = enrichment,
                     tmdbRecommendations = recommendations,
                     tmdbVideos = videos,
@@ -250,6 +258,7 @@ class DetailsViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Log.w("DetailsViewModel", "TMDB enrichment failed: ${e.message}")
+                _state.value = _state.value.copy(tmdbLoading = false)
             }
         }
     }
