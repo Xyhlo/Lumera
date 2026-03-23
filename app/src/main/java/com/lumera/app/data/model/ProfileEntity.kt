@@ -62,5 +62,9 @@ data class ProfileEntity(
     val subtitleSize: Int = 100,                     // 50-200%
     val subtitleOffset: Int = 0,                     // -20 to 20%
     val subtitleTextColor: Long = 0xFFFFFFFFL,       // White (ARGB)
-    val subtitleBackgroundColor: Long = 0x00000000L  // Transparent
+    val subtitleBackgroundColor: Long = 0x00000000L, // Transparent
+
+    // TMDB integration
+    val tmdbEnabled: Boolean = false,
+    val tmdbLanguage: String = ""                    // ISO-639-1, empty = device locale
 )

@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.auth.StremioAuthManager
 import com.lumera.app.data.auth.StremioConnectionState
+import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.StremioAddonItem
 import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.remote.StremioAuthError
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,14 +31,17 @@ sealed class IntegrationsEvent {
 data class IntegrationsUiState(
     val connectionState: StremioConnectionState = StremioConnectionState.Disconnected,
     val isLoading: Boolean = false,
-    val pendingAddons: List<StremioAddonItem>? = null
+    val pendingAddons: List<StremioAddonItem>? = null,
+    val tmdbEnabled: Boolean = false,
+    val tmdbLanguage: String = ""
 )
 
 @HiltViewModel
 class IntegrationsViewModel @Inject constructor(
     private val stremioAuthManager: StremioAuthManager,
     private val addonRepository: AddonRepository,
-    private val profileConfigurationManager: ProfileConfigurationManager
+    private val profileConfigurationManager: ProfileConfigurationManager,
+    private val dao: AddonDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IntegrationsUiState())
@@ -50,6 +56,35 @@ class IntegrationsViewModel @Inject constructor(
             stremioAuthManager.connectionState.collect { state ->
                 _uiState.value = _uiState.value.copy(connectionState = state)
             }
+        }
+        // Load TMDB settings from active profile
+        viewModelScope.launch(Dispatchers.IO) {
+            val profileId = profileConfigurationManager.getLastActiveProfileId() ?: 1
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) {
+                _uiState.value = _uiState.value.copy(
+                    tmdbEnabled = profile.tmdbEnabled,
+                    tmdbLanguage = profile.tmdbLanguage
+                )
+            }
+        }
+    }
+
+    fun updateTmdbEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(tmdbEnabled = enabled)
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profileId = profileConfigurationManager.getLastActiveProfileId() ?: 1
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(tmdbEnabled = enabled))
+        }
+    }
+
+    fun updateTmdbLanguage(language: String) {
+        _uiState.value = _uiState.value.copy(tmdbLanguage = language)
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profileId = profileConfigurationManager.getLastActiveProfileId() ?: 1
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(tmdbLanguage = language))
         }
     }
 

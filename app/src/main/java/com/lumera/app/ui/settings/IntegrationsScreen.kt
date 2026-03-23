@@ -51,6 +51,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.lumera.app.data.auth.StremioConnectionState
 import com.lumera.app.remote_input.ServerInfo
 import kotlinx.coroutines.delay
@@ -107,6 +110,8 @@ fun IntegrationsScreen(
     val stremioConnected = state.connectionState is StremioConnectionState.Connected
     val stremioEmail = (state.connectionState as? StremioConnectionState.Connected)?.email
 
+    var showTmdbSettings by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.Top
@@ -127,7 +132,6 @@ fun IntegrationsScreen(
         Spacer(Modifier.height(32.dp))
 
         // Stremio Integration Item
-
         IntegrationItem(
             title = "Stremio",
             subtitle = if (stremioConnected) stremioEmail ?: "Connected" else "Not Connected",
@@ -142,11 +146,27 @@ fun IntegrationsScreen(
             modifier = goBackModifier.then(upBlockModifier)
         )
 
+        Spacer(Modifier.height(12.dp))
+
+        // TMDB Integration Item
+        IntegrationItem(
+            title = "TMDB",
+            subtitle = if (state.tmdbEnabled) {
+                val langName = TMDB_LANGUAGE_OPTIONS
+                    .firstOrNull { it.second == state.tmdbLanguage }?.first
+                    ?: "Device Language"
+                "Enabled · $langName"
+            } else "Disabled",
+            isConnected = state.tmdbEnabled,
+            onClick = { showTmdbSettings = true },
+            modifier = goBackModifier
+        )
+
         Spacer(Modifier.height(16.dp))
 
         // Future integrations placeholder
         Text(
-            "More integrations coming soon (Trakt, TMDB)",
+            "More integrations coming soon (Trakt)",
             style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(0.4f)
         )
@@ -198,6 +218,17 @@ fun IntegrationsScreen(
             onConfirmImport = { selectedAddons ->
                 viewModel.importAddons(selectedAddons)
             }
+        )
+    }
+
+    // TMDB Settings Dialog
+    if (showTmdbSettings) {
+        TmdbSettingsDialog(
+            enabled = state.tmdbEnabled,
+            language = state.tmdbLanguage,
+            onEnabledChange = { viewModel.updateTmdbEnabled(it) },
+            onLanguageChange = { viewModel.updateTmdbLanguage(it) },
+            onDismiss = { showTmdbSettings = false }
         )
     }
 }
@@ -672,6 +703,304 @@ private fun DisconnectConfirmDialog(
                     )
                 }
             }
+        }
+    }
+}
+
+// =============================================================================
+// TMDB SETTINGS DIALOG
+// =============================================================================
+
+private val TMDB_LANGUAGE_OPTIONS: List<Pair<String, String>> = listOf(
+    "Device Language" to "",
+    "English" to "en",
+    "Spanish" to "es",
+    "Spanish (Latin America)" to "es-419",
+    "French" to "fr",
+    "German" to "de",
+    "Italian" to "it",
+    "Portuguese" to "pt",
+    "Portuguese (Brazil)" to "pt-BR",
+    "Russian" to "ru",
+    "Japanese" to "ja",
+    "Korean" to "ko",
+    "Chinese" to "zh",
+    "Chinese (Simplified)" to "zh-CN",
+    "Chinese (Traditional)" to "zh-TW",
+    "Arabic" to "ar",
+    "Hindi" to "hi",
+    "Turkish" to "tr",
+    "Polish" to "pl",
+    "Dutch" to "nl",
+    "Swedish" to "sv",
+    "Norwegian" to "no",
+    "Danish" to "da",
+    "Finnish" to "fi",
+    "Czech" to "cs",
+    "Hungarian" to "hu",
+    "Romanian" to "ro",
+    "Thai" to "th",
+    "Vietnamese" to "vi",
+    "Indonesian" to "id",
+    "Ukrainian" to "uk",
+    "Greek" to "el",
+    "Hebrew" to "he",
+    "Malay" to "ms",
+    "Croatian" to "hr",
+    "Bulgarian" to "bg",
+    "Slovak" to "sk",
+    "Serbian" to "sr",
+    "Filipino" to "tl",
+    "Persian" to "fa",
+    "Bengali" to "bn",
+    "Tamil" to "ta",
+    "Telugu" to "te",
+    "Afrikaans" to "af",
+    "Albanian" to "sq",
+    "Armenian" to "hy",
+    "Azerbaijani" to "az",
+    "Basque" to "eu",
+    "Belarusian" to "be",
+    "Bosnian" to "bs",
+    "Catalan" to "ca",
+    "Estonian" to "et",
+    "Georgian" to "ka",
+    "Icelandic" to "is",
+    "Irish" to "ga",
+    "Kannada" to "kn",
+    "Kazakh" to "kk",
+    "Latvian" to "lv",
+    "Lithuanian" to "lt",
+    "Macedonian" to "mk",
+    "Malayalam" to "ml",
+    "Mongolian" to "mn",
+    "Slovenian" to "sl",
+    "Swahili" to "sw",
+    "Urdu" to "ur"
+)
+
+@Composable
+private fun TmdbSettingsDialog(
+    enabled: Boolean,
+    language: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onLanguageChange: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val toggleFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(100)
+        toggleFocusRequester.requestFocus()
+    }
+
+    val selectedIndex = TMDB_LANGUAGE_OPTIONS.indexOfFirst { it.second == language }.coerceAtLeast(0)
+    val listState = rememberLazyListState()
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex > 0) runCatching { listState.scrollToItem(selectedIndex) }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 65.dp)
+                    .width(460.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.background)
+                    .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                    .padding(24.dp)
+            ) {
+                Column {
+                    Text(
+                        "TMDB Settings",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+
+                    Text(
+                        "Enrich metadata with localized info, cast, ratings, and more.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Enable/Disable toggle
+                    TmdbToggleItem(
+                        title = "Enable TMDB",
+                        subtitle = "Fetch enhanced metadata from The Movie Database",
+                        isEnabled = enabled,
+                        onToggle = { onEnabledChange(!enabled) },
+                        focusRequester = toggleFocusRequester
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // Language section header
+                    Text(
+                        "Metadata Language",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        color = if (enabled) Color.White else Color.White.copy(0.4f)
+                    )
+                    Text(
+                        "Titles, descriptions, and logos will use this language when available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (enabled) Color.Gray else Color.Gray.copy(0.5f),
+                        modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                    )
+
+                    // Scrollable language list
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                    ) {
+                        itemsIndexed(TMDB_LANGUAGE_OPTIONS) { _, (displayName, code) ->
+                            val isSelected = code == language
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isFocused by interactionSource.collectIsFocusedAsState()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        when {
+                                            isFocused -> Color.White.copy(0.1f)
+                                            isSelected -> accentColor.copy(0.1f)
+                                            else -> Color.Transparent
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isFocused) 1.dp else 0.dp,
+                                        color = if (isFocused) accentColor else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .then(
+                                        if (enabled) Modifier
+                                            .clickable(interactionSource = interactionSource, indication = null) {
+                                                onLanguageChange(code)
+                                            }
+                                            .focusable(interactionSource = interactionSource)
+                                        else Modifier
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (enabled) accentColor else Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                }
+                                Text(
+                                    text = displayName,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    ),
+                                    color = when {
+                                        !enabled -> Color.White.copy(0.3f)
+                                        isSelected -> accentColor
+                                        isFocused -> Color.White
+                                        else -> Color.White.copy(0.7f)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IntegrationButton(
+                            text = "Close",
+                            onClick = onDismiss,
+                            modifier = Modifier.width(100.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TmdbToggleItem(
+    title: String,
+    subtitle: String,
+    isEnabled: Boolean,
+    onToggle: () -> Unit,
+    focusRequester: FocusRequester? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val scale by animateFloatAsState(if (isFocused) 1.02f else 1f)
+    val bgColor by animateColorAsState(if (isFocused) Color.White.copy(0.1f) else Color.White.copy(0.05f))
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onToggle() }
+            .focusable(interactionSource = interactionSource)
+            .padding(16.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = Color.White
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        // Toggle indicator
+        Box(
+            modifier = Modifier
+                .size(width = 40.dp, height = 22.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(
+                    if (isEnabled) MaterialTheme.colorScheme.primary.copy(0.8f)
+                    else Color.White.copy(0.15f)
+                ),
+            contentAlignment = if (isEnabled) Alignment.CenterEnd else Alignment.CenterStart
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(2.dp)
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Color.White)
+            )
         }
     }
 }
