@@ -111,12 +111,19 @@ class DetailsViewModel @Inject constructor(
 
         loadDetailsJob = viewModelScope.launch {
             try {
-                val details = repository.resolveMetaDetails(type, id, addonBaseUrl)
+                // Resolve tmdb: IDs to IMDb IDs via TMDB API so all addons work consistently
+                val resolvedId = if (id.startsWith("tmdb:", ignoreCase = true)) {
+                    val tmdbNumericId = id.substringAfter(':').substringBefore(':').toIntOrNull()
+                    val mediaType = tmdbService.normalizeMediaType(type)
+                    tmdbNumericId?.let { tmdbService.tmdbToImdb(it, mediaType) } ?: id
+                } else id
+
+                val details = repository.resolveMetaDetails(type, resolvedId, addonBaseUrl)
                     ?: throw Exception("No meta found")
                 if (requestVersion != loadRequestVersion) return@launch
                 loadedContentKey = requestKey
-                // Use the meta's returned ID for streams — addons may resolve tmdb: to tt* IDs
-                val streamFetchId = details.id
+                // Use resolved ID for streams — guarantees IMDb format for stream addons
+                val streamFetchId = if (details.id.startsWith("tt")) details.id else resolvedId
                 val resumePlaybackId = if (details.type == "series") {
                     dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%")?.id
                 } else {
