@@ -112,7 +112,9 @@ class DetailsViewModel @Inject constructor(
         loadDetailsJob = viewModelScope.launch {
             try {
                 // Resolve tmdb: IDs to IMDb IDs via TMDB API so all addons work consistently
-                val resolvedId = if (id.startsWith("tmdb:", ignoreCase = true)) {
+                val isTmdbEnabled = profileConfigurationManager.getLastActiveProfileId()
+                    ?.let { dao.getProfileById(it) }?.tmdbEnabled == true
+                val resolvedId = if (isTmdbEnabled && id.startsWith("tmdb:", ignoreCase = true)) {
                     val tmdbNumericId = id.substringAfter(':').substringBefore(':').toIntOrNull()
                     val mediaType = tmdbService.normalizeMediaType(type)
                     tmdbNumericId?.let { tmdbService.tmdbToImdb(it, mediaType) } ?: id
