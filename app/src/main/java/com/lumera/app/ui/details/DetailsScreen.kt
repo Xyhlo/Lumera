@@ -198,7 +198,7 @@ fun DetailsScreen(
 
     // When focus returns to the hero from a row, animate back to the top
     LaunchedEffect(heroHasFocus) {
-        if (heroHasFocus && listState.firstVisibleItemIndex > 0) {
+        if (heroHasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) {
             listState.animateScrollToItem(0)
         }
     }
@@ -263,8 +263,8 @@ fun DetailsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(420.dp)
-                    .padding(start = 48.dp, end = 48.dp, bottom = 24.dp)
+                    .height(500.dp)
+                    .padding(start = 48.dp, end = 48.dp, top = 60.dp, bottom = 24.dp)
                     .onFocusChanged { heroHasFocus = it.hasFocus },
                 verticalArrangement = Arrangement.Bottom
             ) {
@@ -526,27 +526,16 @@ fun DetailsScreen(
                 val tmdbRecommendations = state.tmdbRecommendations
                 val tmdbCollection = state.tmdbCollection
 
-                if (directorMembers.isNotEmpty() || writerMembers.isNotEmpty()) {
-                    item(key = "tmdb_crew") {
-                        Column(modifier = Modifier.padding(start = 48.dp, top = 16.dp)) {
-                            if (directorMembers.isNotEmpty()) {
-                                val label = directorMembers.first().character ?: "Director"
-                                Text(text = "$label: ${directorMembers.joinToString { it.name }}", style = MaterialTheme.typography.bodyMedium, color = textColor.copy(alpha = 0.7f))
-                            }
-                            if (writerMembers.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "Writer: ${writerMembers.joinToString { it.name }}", style = MaterialTheme.typography.bodyMedium, color = textColor.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-                }
-
-                if (castMembers.isNotEmpty()) {
+                val leadingCrew = directorMembers + writerMembers
+                if (castMembers.isNotEmpty() || leadingCrew.isNotEmpty()) {
                     item(key = "tmdb_cast") {
+                        val title = if (leadingCrew.isNotEmpty() && castMembers.isNotEmpty()) "Director & Cast"
+                            else if (leadingCrew.isNotEmpty()) "Director"
+                            else "Cast"
                         Column(modifier = Modifier.padding(top = 28.dp)) {
-                            SectionHeader("Cast", textColor, Modifier.padding(start = 48.dp))
+                            SectionHeader(title, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            CastRow(castMembers, accentColor, textColor)
+                            CastRow(leadingCrew, castMembers, accentColor, textColor)
                         }
                     }
                 }
@@ -561,13 +550,31 @@ fun DetailsScreen(
                     }
                 }
 
-                val allStudios = companies + networks.map { TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId) }
-                if (allStudios.isNotEmpty()) {
-                    item(key = "tmdb_studios") {
+                val networkCompanies = networks.map { TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId) }
+                val isTvShow = type == "series"
+
+                // TV shows: Networks first, then Production. Movies: Production first, then Networks.
+                val firstStudios = if (isTvShow) networkCompanies else companies
+                val firstLabel = if (isTvShow) "Network" else "Production"
+                val secondStudios = if (isTvShow) companies else networkCompanies
+                val secondLabel = if (isTvShow) "Production" else "Network"
+
+                if (firstStudios.isNotEmpty()) {
+                    item(key = "tmdb_studios_first") {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
-                            SectionHeader("Studios", textColor, Modifier.padding(start = 48.dp))
+                            SectionHeader(firstLabel, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            StudioRow(allStudios, textColor, accentColor)
+                            StudioRow(firstStudios, textColor, accentColor)
+                        }
+                    }
+                }
+
+                if (secondStudios.isNotEmpty()) {
+                    item(key = "tmdb_studios_second") {
+                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                            SectionHeader(secondLabel, textColor, Modifier.padding(start = 48.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            StudioRow(secondStudios, textColor, accentColor)
                         }
                     }
                 }
@@ -723,7 +730,7 @@ private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
+private fun CastRow(leadingCrew: List<TmdbCastInfo>, cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -744,9 +751,37 @@ private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Col
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
-            itemsIndexed(cast.take(20), key = { i, it -> "cast_${it.tmdbId ?: i}" }) { index, member ->
+            // Leading crew (directors, writers)
+            itemsIndexed(leadingCrew, key = { i, it -> "crew_${it.tmdbId ?: i}" }) { index, member ->
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    CastCard(member, accentColor, textColor)
+                }
+            }
+
+            // Vertical divider between crew and cast
+            if (leadingCrew.isNotEmpty() && cast.isNotEmpty()) {
+                item(key = "cast_divider") {
+                    Box(
+                        modifier = Modifier.height(110.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(72.dp)
+                                .background(Color.White.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+            }
+
+            // Regular cast
+            itemsIndexed(cast.take(20), key = { i, it -> "cast_${it.tmdbId ?: i}" }) { index, member ->
+                val isFirstOverall = leadingCrew.isEmpty() && index == 0
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && isFirstOverall) true else false
                 }) {
                     CastCard(member, accentColor, textColor)
                 }
@@ -927,7 +962,7 @@ private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color, accentCo
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
         LazyRow(
             state = rowState,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             items(studios, key = { "${it.tmdbId}:${it.name}" }) { studio ->
@@ -942,36 +977,39 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: C
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "studioScale")
-    val hasLogo = studio.logo != null
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Box(
         modifier = Modifier
-            .height(52.dp)
+            .width(140.dp)
+            .height(56.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) accentColor else Color.Transparent,
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(12.dp)
             )
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 14.dp)
+            .focusable(interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
     ) {
-        if (hasLogo) {
+        if (studio.logo != null) {
             AsyncImage(
                 model = studio.logo,
                 contentDescription = studio.name,
-                modifier = Modifier.height(29.dp).widthIn(max = 86.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 contentScale = ContentScale.Fit
             )
         } else {
             Text(
                 text = studio.name,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 17.sp),
+                style = MaterialTheme.typography.labelMedium,
                 color = if (isFocused) accentColor else Color.Black,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
     }
