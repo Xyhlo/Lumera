@@ -567,7 +567,7 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Studios", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            StudioRow(allStudios, textColor)
+                            StudioRow(allStudios, textColor, accentColor)
                         }
                     }
                 }
@@ -907,43 +907,73 @@ private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Col
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(end = 24.dp)
-    ) {
-        items(studios, key = { "${it.tmdbId}:${it.name}" }) { studio ->
-            StudioChip(studio, textColor)
+private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color, accentColor: Color) {
+    val rowState = rememberLazyListState()
+    val density = LocalDensity.current
+    val startPad = 48.dp
+    val paddingPx = remember(density) { with(density) { startPad.toPx() } }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val endPadding = (screenWidth - startPad - 140.dp).coerceAtLeast(120.dp)
+
+    val pivotSpec = remember(paddingPx) {
+        FocusPivotSpec(
+            customOffset = paddingPx,
+            stiffnessProvider = { Spring.StiffnessLow }
+        )
+    }
+
+    CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = startPad, end = endPadding)
+        ) {
+            items(studios, key = { "${it.tmdbId}:${it.name}" }) { studio ->
+                StudioChip(studio, textColor, accentColor)
+            }
         }
     }
 }
 
 @Composable
-private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color) {
+private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: Color) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "studioScale")
+    val hasLogo = studio.logo != null
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .height(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(0.06f))
-            .padding(horizontal = 10.dp)
+            .height(52.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) accentColor else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 14.dp)
     ) {
-        if (studio.logo != null) {
+        if (hasLogo) {
             AsyncImage(
                 model = studio.logo,
                 contentDescription = studio.name,
-                modifier = Modifier.height(20.dp).widthIn(max = 60.dp),
+                modifier = Modifier.height(29.dp).widthIn(max = 86.dp),
                 contentScale = ContentScale.Fit
             )
-            Spacer(modifier = Modifier.width(8.dp))
+        } else {
+            Text(
+                text = studio.name,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 17.sp),
+                color = if (isFocused) accentColor else Color.Black,
+                maxLines = 1
+            )
         }
-        Text(
-            text = studio.name,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
-            color = textColor.copy(alpha = 0.7f),
-            maxLines = 1
-        )
     }
 }
 
