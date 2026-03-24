@@ -39,13 +39,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -84,17 +81,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.relocation.BringIntoViewResponder
-import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.geometry.Rect
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -181,47 +174,33 @@ fun DetailsScreen(
     }
 
     val firstButtonFocusRequester = remember { FocusRequester() }
+    val firstRowPivotRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     val tmdbPending = state.tmdbEnabled && state.tmdbLoading
     val contentReady = showMovieContent && !tmdbPending
 
-    // Suppress auto-scroll when hero children get focus
-    @OptIn(ExperimentalFoundationApi::class)
-    val heroNoScrollResponder = remember {
-        object : BringIntoViewResponder {
-            override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
-            override suspend fun bringChildIntoView(localRect: () -> Rect?) { }
-        }
-    }
+    // Track whether focus is inside the hero area (any button).
+    // While hero has focus, suppress vertical pivot scrolling (viewport stays fixed,
+    // just like the hero carousel on the home screen).
+    var heroHasFocus by remember { mutableStateOf(false) }
 
-    // For nested horizontal rows — prevent vertical scroll but keep focus traversal
-    @OptIn(ExperimentalFoundationApi::class)
-    val noVerticalScrollResponder = remember {
-        object : BringIntoViewResponder {
-            override fun calculateRectForParent(localRect: Rect): Rect = localRect
-            override suspend fun bringChildIntoView(localRect: () -> Rect?) { }
-        }
-    }
-
-    // Vertical pivot for smooth row-to-row scrolling (matches home screen behavior)
+    // Vertical pivot for smooth row-to-row scrolling (matches home screen SimpleLayout)
     val density = LocalDensity.current
     @OptIn(ExperimentalFoundationApi::class)
     val verticalPivot = remember(density) {
         val pivotPx = with(density) { 71.dp.toPx() }
         FocusPivotSpec(
             customOffset = pivotPx,
+            skipScrollProvider = { heroHasFocus },
             stiffnessProvider = { Spring.StiffnessLow }
         )
     }
 
-    // Scroll back to hero when hero buttons get focus
-    val onHeroButtonFocused: () -> Unit = remember(listState) {
-        {
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
-                coroutineScope.launch { listState.animateScrollToItem(0) }
-            }
+    // When focus returns to the hero from a row, animate back to the top
+    LaunchedEffect(heroHasFocus) {
+        if (heroHasFocus && listState.firstVisibleItemIndex > 0) {
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -277,16 +256,17 @@ fun DetailsScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(top = 0.dp, bottom = 0.dp),
+                verticalArrangement = Arrangement.spacedBy(15.dp)
             ) {
-            // ── Hero item (fixed 540dp height, scroll-suppressed) ──
-            item(key = "hero", contentType = "hero") {
-            Box(modifier = Modifier.bringIntoViewResponder(heroNoScrollResponder)) {
+            // ── Hero item (fixed height, scroll-suppressed) ──
+            item(key = "hero") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(540.dp)
-                    .padding(start = 48.dp, end = 48.dp, bottom = 24.dp),
+                    .height(420.dp)
+                    .padding(start = 48.dp, end = 48.dp, bottom = 24.dp)
+                    .onFocusChanged { heroHasFocus = it.hasFocus },
                 verticalArrangement = Arrangement.Bottom
             ) {
                 val titleStyle = MaterialTheme.typography.displaySmall.copy(
@@ -433,6 +413,10 @@ fun DetailsScreen(
                 val firstEpisodeSeason = firstEpisode?.season?.takeIf { it > 0 } ?: 1
                 val firstEpisodeNumber = firstEpisode?.episode?.takeIf { it > 0 } ?: 1
 
+                val navigateToFirstRow: (() -> Unit)? = if (hasEnrichment) {
+                    { firstRowPivotRequester.requestFocus() }
+                } else null
+
                 if (type == "series") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val playLabel = if (resumePlaybackId != null) {
@@ -450,7 +434,7 @@ fun DetailsScreen(
                         VoidActionButton(
                             label = playLabel,
                             icon = Icons.Default.PlayArrow,
-                            modifier = Modifier.focusRequester(firstButtonFocusRequester).onFocusChanged { if (it.isFocused) onHeroButtonFocused() },
+                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
                                 val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
                                 val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
@@ -472,13 +456,15 @@ fun DetailsScreen(
                         VoidActionButton(
                             label = "More Episodes",
                             icon = Icons.Default.List,
-                            onClick = { viewModel.openEpisodes() }
+                            onClick = { viewModel.openEpisodes() },
+                            onNavigateDown = if (resumePlaybackId == null && !state.progressCleared) navigateToFirstRow else null
                         )
 
                         if (resumePlaybackId != null || state.progressCleared) {
                             VoidActionButton(
                                 label = if (state.progressCleared) "Undo" else "Clear Progress",
                                 icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
+                                onNavigateDown = navigateToFirstRow,
                                 onClick = {
                                     if (state.progressCleared) {
                                         viewModel.undoClearProgress()
@@ -494,7 +480,8 @@ fun DetailsScreen(
                         VoidActionButton(
                             label = if (resumePlaybackId != null) "Resume" else "Play Movie",
                             icon = Icons.Default.PlayArrow,
-                            modifier = Modifier.focusRequester(firstButtonFocusRequester).onFocusChanged { if (it.isFocused) onHeroButtonFocused() },
+                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
+                            onNavigateDown = if (resumePlaybackId == null && !state.progressCleared) navigateToFirstRow else null,
                             onClick = {
                                 pendingPlaybackId = streamId
                                 pendingPlaybackType = type
@@ -507,6 +494,7 @@ fun DetailsScreen(
                             VoidActionButton(
                                 label = if (state.progressCleared) "Undo" else "Clear Progress",
                                 icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
+                                onNavigateDown = navigateToFirstRow,
                                 onClick = {
                                     if (state.progressCleared) {
                                         viewModel.undoClearProgress()
@@ -531,7 +519,6 @@ fun DetailsScreen(
                     }
                 }
             }
-            } // Box heroNoScrollResponder
             } // hero item
 
             // ── TMDB Enrichment Sections ──
@@ -560,28 +547,26 @@ fun DetailsScreen(
                     }
                 }
 
+                // First focusable row gets the pivot (hero Down key targets it)
+                var pivotAssigned = false
+                fun nextPivot(): FocusRequester? { if (pivotAssigned) return null; pivotAssigned = true; return firstRowPivotRequester }
+
                 if (castMembers.isNotEmpty()) {
                     item(key = "tmdb_cast") {
-                        @OptIn(ExperimentalFoundationApi::class)
-                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Cast", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            CastRow(castMembers, accentColor, textColor)
-                        }
+                            CastRow(castMembers, accentColor, textColor, pivotFocusRequester = nextPivot())
                         }
                     }
                 }
 
                 if (tmdbVideos.isNotEmpty()) {
                     item(key = "tmdb_trailers") {
-                        @OptIn(ExperimentalFoundationApi::class)
-                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            TrailerRow(tmdbVideos, accentColor, textColor)
-                        }
+                            TrailerRow(tmdbVideos, accentColor, textColor, pivotFocusRequester = nextPivot())
                         }
                     }
                 }
@@ -599,13 +584,10 @@ fun DetailsScreen(
 
                 if (tmdbRecommendations.isNotEmpty()) {
                     item(key = "tmdb_recs") {
-                        @OptIn(ExperimentalFoundationApi::class)
-                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("More Like This", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbRecommendations, accentColor)
-                        }
+                            RecommendationRow(tmdbRecommendations, accentColor, pivotFocusRequester = nextPivot())
                         }
                     }
                 }
@@ -613,13 +595,10 @@ fun DetailsScreen(
                 val collectionName = state.tmdbCollectionName
                 if (tmdbCollection.isNotEmpty() && collectionName != null) {
                     item(key = "tmdb_collection") {
-                        @OptIn(ExperimentalFoundationApi::class)
-                        Box(modifier = Modifier.bringIntoViewResponder(noVerticalScrollResponder)) {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(collectionName, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbCollection, accentColor)
-                        }
+                            RecommendationRow(tmdbCollection, accentColor, pivotFocusRequester = nextPivot())
                         }
                     }
                 }
@@ -680,7 +659,8 @@ private fun VoidActionButton(
     label: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateDown: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -697,6 +677,11 @@ private fun VoidActionButton(
                 if (isFocused) 2.dp else 1.dp,
                 if (isFocused) accentColor else Color.White.copy(0.15f),
                 RoundedCornerShape(8.dp)
+            )
+            .then(
+                if (onNavigateDown != null) Modifier.onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown) { onNavigateDown(); true } else false
+                } else Modifier
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
@@ -752,55 +737,59 @@ private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = 
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
+private fun CastRow(cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color, pivotFocusRequester: FocusRequester? = null) {
     val rowState = rememberLazyListState()
-    val pivotRequester = remember { FocusRequester() }
-    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
-    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val endPadding = (screenWidth - startPad - 80.dp).coerceAtLeast(120.dp)
 
+    var skipHorizontalScroll by remember { mutableStateOf(pivotFocusRequester != null) }
+    LaunchedEffect(skipHorizontalScroll) {
+        if (skipHorizontalScroll) { delay(300); skipHorizontalScroll = false }
+    }
+
+    val pivotSpec = remember(paddingPx) {
+        FocusPivotSpec(
+            customOffset = paddingPx,
+            skipScrollProvider = { skipHorizontalScroll },
+            stiffnessProvider = { Spring.StiffnessLow }
+        )
+    }
+
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
-        Box(modifier = Modifier
-            .focusGroup()
-            .focusProperties { enter = { pivotRequester } }
-        ) {
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(cast.take(20), key = { _, it -> it.tmdbId ?: it.name }) { index, member ->
-                Box(modifier = Modifier
-                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
-                    .onPreviewKeyEvent {
-                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
-                    }
-                ) {
-                    CastCard(member, accentColor, textColor, onFocused = { lastFocusedIndex = index })
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    CastCard(
+                        member, accentColor, textColor,
+                        modifier = if (pivotFocusRequester != null && index == 0) Modifier.focusRequester(pivotFocusRequester) else Modifier
+                    )
                 }
             }
-        }
         }
     }
 }
 
 
 @Composable
-private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color, onFocused: () -> Unit = {}) {
+private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "castScale")
-    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
+        modifier = modifier
             .width(80.dp)
             .scale(scale)
             .focusable(interactionSource = interactionSource)
@@ -845,53 +834,57 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color,
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color) {
+private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color, pivotFocusRequester: FocusRequester? = null) {
     val rowState = rememberLazyListState()
-    val pivotRequester = remember { FocusRequester() }
-    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
-    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val endPadding = (screenWidth - startPad - 190.dp).coerceAtLeast(120.dp)
 
+    var skipHorizontalScroll by remember { mutableStateOf(pivotFocusRequester != null) }
+    LaunchedEffect(skipHorizontalScroll) {
+        if (skipHorizontalScroll) { delay(300); skipHorizontalScroll = false }
+    }
+
+    val pivotSpec = remember(paddingPx) {
+        FocusPivotSpec(
+            customOffset = paddingPx,
+            skipScrollProvider = { skipHorizontalScroll },
+            stiffnessProvider = { Spring.StiffnessLow }
+        )
+    }
+
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
-        Box(modifier = Modifier
-            .focusGroup()
-            .focusProperties { enter = { pivotRequester } }
-        ) {
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(videos.take(6), key = { _, it -> it.key }) { index, video ->
-                Box(modifier = Modifier
-                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
-                    .onPreviewKeyEvent {
-                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
-                    }
-                ) {
-                    TrailerCard(video, accentColor, textColor, onFocused = { lastFocusedIndex = index })
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    TrailerCard(
+                        video, accentColor, textColor,
+                        modifier = if (pivotFocusRequester != null && index == 0) Modifier.focusRequester(pivotFocusRequester) else Modifier
+                    )
                 }
             }
-        }
         }
     }
 }
 
 @Composable
-private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, onFocused: () -> Unit = {}) {
+private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
-    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(190.dp)
             .scale(scale)
             .focusable(interactionSource = interactionSource)
@@ -978,53 +971,57 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) {
+private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, pivotFocusRequester: FocusRequester? = null) {
     val rowState = rememberLazyListState()
-    val pivotRequester = remember { FocusRequester() }
-    var lastFocusedIndex by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
-    val pivotSpec = remember(paddingPx) { FocusPivotSpec(customOffset = paddingPx) }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val endPadding = (screenWidth - startPad - 120.dp).coerceAtLeast(120.dp)
 
+    var skipHorizontalScroll by remember { mutableStateOf(pivotFocusRequester != null) }
+    LaunchedEffect(skipHorizontalScroll) {
+        if (skipHorizontalScroll) { delay(300); skipHorizontalScroll = false }
+    }
+
+    val pivotSpec = remember(paddingPx) {
+        FocusPivotSpec(
+            customOffset = paddingPx,
+            skipScrollProvider = { skipHorizontalScroll },
+            stiffnessProvider = { Spring.StiffnessLow }
+        )
+    }
+
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
-        Box(modifier = Modifier
-            .focusGroup()
-            .focusProperties { enter = { pivotRequester } }
-        ) {
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(items, key = { _, it -> it.tmdbId }) { index, item ->
-                Box(modifier = Modifier
-                    .then(if (index == lastFocusedIndex) Modifier.focusRequester(pivotRequester) else Modifier)
-                    .onPreviewKeyEvent {
-                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
-                    }
-                ) {
-                    RecommendationCard(item, accentColor, onFocused = { lastFocusedIndex = index })
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    RecommendationCard(
+                        item, accentColor,
+                        modifier = if (pivotFocusRequester != null && index == 0) Modifier.focusRequester(pivotFocusRequester) else Modifier
+                    )
                 }
             }
-        }
         }
     }
 }
 
 @Composable
-private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, onFocused: () -> Unit = {}) {
+private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
-    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(120.dp)
             .height(180.dp)
             .scale(scale)
