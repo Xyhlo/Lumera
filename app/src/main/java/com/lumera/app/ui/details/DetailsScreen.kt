@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
@@ -107,7 +108,8 @@ fun DetailsScreen(
     autoSelectSource: Boolean = false,
     rememberSourceSelection: Boolean = true,
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
-    viewModel: DetailsViewModel = hiltViewModel()
+    onNavigateToDetails: (type: String, id: String) -> Unit = { _, _ -> },
+    viewModel: DetailsViewModel = hiltViewModel(key = "details_${type}_${id}")
 ) {
     LaunchedEffect(type, id) { viewModel.loadDetails(type, id, addonBaseUrl) }
 
@@ -584,7 +586,7 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("More Like This", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbRecommendations, accentColor)
+                            RecommendationRow(tmdbRecommendations, accentColor, onNavigateToDetails)
                         }
                     }
                 }
@@ -595,7 +597,7 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(collectionName, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbCollection, accentColor)
+                            RecommendationRow(tmdbCollection, accentColor, onNavigateToDetails)
                         }
                     }
                 }
@@ -1017,7 +1019,7 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: C
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) {
+private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, onItemClick: (type: String, id: String) -> Unit = { _, _ -> }) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -1042,7 +1044,10 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) 
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
-                    RecommendationCard(item, accentColor)
+                    RecommendationCard(item, accentColor, onClick = {
+                        val stremioType = if (item.type == "tv") "series" else item.type
+                        onItemClick(stremioType, "tmdb:${item.tmdbId}")
+                    })
                 }
             }
         }
@@ -1050,7 +1055,7 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color) 
 }
 
 @Composable
-private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifier: Modifier = Modifier) {
+private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
@@ -1067,6 +1072,7 @@ private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifi
                 color = if (isFocused) accentColor else Color.Transparent,
                 shape = RoundedCornerShape(10.dp)
             )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
     ) {
         if (item.poster != null) {

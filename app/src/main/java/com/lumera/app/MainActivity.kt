@@ -28,6 +28,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1373,93 +1378,129 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         } else if (view == "details") {
-                            BackHandler {
-                                activeView = previousView  // Go back to grid or menu
+                            val detailsNavController = rememberNavController()
+                            val startRoute = "detail/${java.net.URLEncoder.encode(selectedMovieType, "UTF-8")}/${java.net.URLEncoder.encode(selectedMovieId, "UTF-8")}?addon=${java.net.URLEncoder.encode(selectedAddonBaseUrl ?: "", "UTF-8")}&resume=${java.net.URLEncoder.encode(detailsResumePlaybackHint ?: "", "UTF-8")}"
+
+                            // Navigate to initial details when first entering
+                            LaunchedEffect(selectedMovieType, selectedMovieId) {
+                                val currentRoute = detailsNavController.currentBackStackEntry?.destination?.route
+                                if (currentRoute == null || currentRoute == "detail_start") {
+                                    detailsNavController.navigate(startRoute) {
+                                        popUpTo("detail_start") { inclusive = true }
+                                    }
+                                }
                             }
-                            DetailsScreen(
-                                type = selectedMovieType,
-                                id = selectedMovieId,
-                                addonBaseUrl = selectedAddonBaseUrl,
-                                resumePlaybackHint = detailsResumePlaybackHint,
-                                autoSelectSource = currentProfile?.autoSelectSource ?: false,
-                                rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
-                                onPlayClick = { url, playbackId, playbackType, playbackTitle, seriesTitle, logo, stream, addonSubtitles, availableStreams, episodes ->
-                                    val resolvedPlaybackTitle = playbackTitle.ifBlank { selectedMovieTitle }
-                                    val resolvedSeriesTitle = seriesTitle.ifBlank { selectedMovieTitle }
-                                    val isSeriesPlayback = playbackType.equals("series", ignoreCase = true) ||
-                                        playbackType.equals("tv", ignoreCase = true)
-                                    if (isSeriesPlayback && resolvedSeriesTitle.isNotBlank()) {
-                                        selectedMovieTitle = resolvedSeriesTitle
-                                    }
-                                    if (logo.isNotBlank()) selectedMovieLogo = logo
-                                    // Capture episode context for autoplay
-                                    playerState.currentEpisodeList = episodes
-                                    playerState.currentStream = stream
-                                    val subtitlePayload = buildSubtitlePayload(stream, addonSubtitles)
-                                    val sourcePayloadInput = if (availableStreams.isNotEmpty()) {
-                                        availableStreams
-                                    } else {
-                                        listOf(stream)
-                                    }
-                                    val sourcePayload = buildSourcePayload(
-                                        streams = sourcePayloadInput,
-                                        selectedStream = stream
-                                    )
-                                    playerState.pendingSourceSelection = PendingSourceSelection(
-                                        playbackId = playbackId,
-                                        launchedStream = stream,
-                                        candidateStreams = sourcePayloadInput
-                                    )
-                                    if (url.startsWith("magnet:")) {
-                                        uiScope.launch {
-                                            mainViewModel.persistActiveProfileState()
-                                            selectedPlaybackId = playbackId
-                                            selectedPlaybackType = playbackType
-                                            selectedPlaybackTitle = resolvedPlaybackTitle
-                                            selectedPlaybackPoster = selectedMoviePoster
-                                            playerState.selectedPlayerSubtitles = subtitlePayload
-                                            playerState.selectedPlayerSources = sourcePayload
-                                            selectedVideoUrl = ""
-                                            torrentProgress = TorrentProgress("Connecting to peers...")
-                                            activeView = "player"
-                                            TorrentService.onStreamReady = { localUrl ->
-                                                torrentProgress = null
-                                                selectedVideoUrl = localUrl
-                                            }
-                                            TorrentService.onStreamError = { error ->
-                                                torrentProgress = null
-                                                if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
-                                            }
-                                            TorrentService.onStreamProgress = { progress ->
-                                                torrentProgress = progress
-                                            }
-                                            val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
-                                                putExtra("MAGNET_LINK", url)
-                                                putExtra("FILE_IDX", stream.fileIdx ?: -1)
-                                                putExtra("FILE_NAME", stream.behaviorHints?.filename ?: "")
-                                            }
-                                            startService(intent)
+
+                            BackHandler {
+                                if (!detailsNavController.popBackStack()) {
+                                    activeView = previousView
+                                }
+                            }
+
+                            // Shared onPlayClick lambda for all detail screens
+                            val onPlayClick: (String, String, String, String, String, String, com.lumera.app.data.model.stremio.Stream, List<com.lumera.app.domain.AddonSubtitle>, List<com.lumera.app.data.model.stremio.Stream>, List<com.lumera.app.data.model.stremio.MetaVideo>) -> Unit = { url, playbackId, playbackType, playbackTitle, seriesTitle, logo, stream, addonSubtitles, availableStreams, episodes ->
+                                val resolvedPlaybackTitle = playbackTitle.ifBlank { selectedMovieTitle }
+                                val resolvedSeriesTitle = seriesTitle.ifBlank { selectedMovieTitle }
+                                val isSeriesPlayback = playbackType.equals("series", ignoreCase = true) ||
+                                    playbackType.equals("tv", ignoreCase = true)
+                                if (isSeriesPlayback && resolvedSeriesTitle.isNotBlank()) {
+                                    selectedMovieTitle = resolvedSeriesTitle
+                                }
+                                if (logo.isNotBlank()) selectedMovieLogo = logo
+                                playerState.currentEpisodeList = episodes
+                                playerState.currentStream = stream
+                                val subtitlePayload = buildSubtitlePayload(stream, addonSubtitles)
+                                val sourcePayloadInput = if (availableStreams.isNotEmpty()) availableStreams else listOf(stream)
+                                val sourcePayload = buildSourcePayload(streams = sourcePayloadInput, selectedStream = stream)
+                                playerState.pendingSourceSelection = PendingSourceSelection(
+                                    playbackId = playbackId,
+                                    launchedStream = stream,
+                                    candidateStreams = sourcePayloadInput
+                                )
+                                if (url.startsWith("magnet:")) {
+                                    uiScope.launch {
+                                        mainViewModel.persistActiveProfileState()
+                                        selectedPlaybackId = playbackId
+                                        selectedPlaybackType = playbackType
+                                        selectedPlaybackTitle = resolvedPlaybackTitle
+                                        selectedPlaybackPoster = selectedMoviePoster
+                                        playerState.selectedPlayerSubtitles = subtitlePayload
+                                        playerState.selectedPlayerSources = sourcePayload
+                                        selectedVideoUrl = ""
+                                        torrentProgress = TorrentProgress("Connecting to peers...")
+                                        activeView = "player"
+                                        TorrentService.onStreamReady = { localUrl ->
+                                            torrentProgress = null
+                                            selectedVideoUrl = localUrl
                                         }
-                                    } else {
-                                        stopService(Intent(this@MainActivity, TorrentService::class.java))
-                                        uiScope.launch {
-                                            mainViewModel.persistActiveProfileState()
-                                            selectedPlaybackId = playbackId
-                                            selectedPlaybackType = playbackType
-                                            selectedPlaybackTitle = resolvedPlaybackTitle
-                                            selectedPlaybackPoster = selectedMoviePoster
-                                            playerState.selectedPlayerSubtitles = subtitlePayload
-                                            playerState.selectedPlayerSources = sourcePayload
-                                            selectedVideoUrl = url
-                                            when (currentProfile?.playerPreference) {
-                                                "external" -> launchExternalPlayer(this@MainActivity, url)
-                                                "ask" -> playerState.showPlayerChoiceDialog = true
-                                                else -> activeView = "player"
-                                            }
+                                        TorrentService.onStreamError = { error ->
+                                            torrentProgress = null
+                                            if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                        }
+                                        TorrentService.onStreamProgress = { progress ->
+                                            torrentProgress = progress
+                                        }
+                                        val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                            putExtra("MAGNET_LINK", url)
+                                            putExtra("FILE_IDX", stream.fileIdx ?: -1)
+                                            putExtra("FILE_NAME", stream.behaviorHints?.filename ?: "")
+                                        }
+                                        startService(intent)
+                                    }
+                                } else {
+                                    stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                    uiScope.launch {
+                                        mainViewModel.persistActiveProfileState()
+                                        selectedPlaybackId = playbackId
+                                        selectedPlaybackType = playbackType
+                                        selectedPlaybackTitle = resolvedPlaybackTitle
+                                        selectedPlaybackPoster = selectedMoviePoster
+                                        playerState.selectedPlayerSubtitles = subtitlePayload
+                                        playerState.selectedPlayerSources = sourcePayload
+                                        selectedVideoUrl = url
+                                        when (currentProfile?.playerPreference) {
+                                            "external" -> launchExternalPlayer(this@MainActivity, url)
+                                            "ask" -> playerState.showPlayerChoiceDialog = true
+                                            else -> activeView = "player"
                                         }
                                     }
                                 }
-                            )
+                            }
+
+                            NavHost(
+                                navController = detailsNavController,
+                                startDestination = "detail_start"
+                            ) {
+                                composable("detail_start") { }
+                                composable(
+                                    "detail/{type}/{id}?addon={addon}&resume={resume}",
+                                    arguments = listOf(
+                                        navArgument("type") { type = NavType.StringType },
+                                        navArgument("id") { type = NavType.StringType },
+                                        navArgument("addon") { type = NavType.StringType; defaultValue = "" },
+                                        navArgument("resume") { type = NavType.StringType; defaultValue = "" }
+                                    )
+                                ) { backStackEntry ->
+                                    val detailType = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("type") ?: "movie", "UTF-8")
+                                    val detailId = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("id") ?: "", "UTF-8")
+                                    val detailAddon = backStackEntry.arguments?.getString("addon")?.takeIf { it.isNotEmpty() }
+                                    val detailResume = backStackEntry.arguments?.getString("resume")?.takeIf { it.isNotEmpty() }
+
+                                    DetailsScreen(
+                                        type = detailType,
+                                        id = detailId,
+                                        addonBaseUrl = detailAddon,
+                                        resumePlaybackHint = detailResume,
+                                        autoSelectSource = currentProfile?.autoSelectSource ?: false,
+                                        rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
+                                        onPlayClick = onPlayClick,
+                                        onNavigateToDetails = { navType, navId ->
+                                            val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
+                                            detailsNavController.navigate(route)
+                                        }
+                                    )
+                                }
+                            }
                         } else if (view == "player") {
                             if (selectedVideoUrl.isBlank() && torrentProgress == null) {
                                 LaunchedEffect(Unit) { activeView = "details" }
