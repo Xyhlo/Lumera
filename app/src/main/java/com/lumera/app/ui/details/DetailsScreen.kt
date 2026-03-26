@@ -109,6 +109,7 @@ fun DetailsScreen(
     rememberSourceSelection: Boolean = true,
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
     onNavigateToDetails: (type: String, id: String) -> Unit = { _, _ -> },
+    onNavigateToCastDetail: (personId: Int, personName: String) -> Unit = { _, _ -> },
     viewModel: DetailsViewModel = hiltViewModel(key = "details_${type}_${id}")
 ) {
     LaunchedEffect(type, id) { viewModel.loadDetails(type, id, addonBaseUrl) }
@@ -176,6 +177,9 @@ fun DetailsScreen(
     }
 
     val firstButtonFocusRequester = remember { FocusRequester() }
+    val restoreFocusRequester = remember { FocusRequester() }
+    var restoreRowKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var restoreIndex by rememberSaveable { mutableStateOf(-1) }
     val listState = rememberLazyListState()
 
     val tmdbPending = state.tmdbEnabled && state.tmdbLoading
@@ -208,7 +212,15 @@ fun DetailsScreen(
     LaunchedEffect(contentReady) {
         if (contentReady) {
             kotlinx.coroutines.delay(200)
-            runCatching { firstButtonFocusRequester.requestFocus() }
+            if (restoreRowKey != null) {
+                // Back navigation: restore focus to the item that was clicked
+                runCatching { restoreFocusRequester.requestFocus() }
+                restoreRowKey = null
+                restoreIndex = -1
+            } else {
+                // First load: focus hero button
+                runCatching { firstButtonFocusRequester.requestFocus() }
+            }
         }
     }
 
@@ -537,7 +549,16 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(title, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            CastRow(leadingCrew, castMembers, accentColor, textColor)
+                            CastRow(
+                                leadingCrew, castMembers, accentColor, textColor,
+                                onPersonClick = { personId, personName, rowIndex ->
+                                    restoreRowKey = "tmdb_cast"
+                                    restoreIndex = rowIndex
+                                    onNavigateToCastDetail(personId, personName)
+                                },
+                                restoreIndex = if (restoreRowKey == "tmdb_cast") restoreIndex else -1,
+                                restoreFocusRequester = if (restoreRowKey == "tmdb_cast") restoreFocusRequester else null
+                            )
                         }
                     }
                 }
@@ -586,7 +607,17 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("More Like This", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbRecommendations, accentColor, onNavigateToDetails)
+                            RecommendationRow(
+                                        tmdbRecommendations, accentColor,
+                                        rowKey = "tmdb_recs",
+                                        onItemClick = { navType, navId, rowKey, index ->
+                                            restoreRowKey = rowKey
+                                            restoreIndex = index
+                                            onNavigateToDetails(navType, navId)
+                                        },
+                                        restoreIndex = if (restoreRowKey == "tmdb_recs") restoreIndex else -1,
+                                        restoreFocusRequester = if (restoreRowKey == "tmdb_recs") restoreFocusRequester else null
+                                    )
                         }
                     }
                 }
@@ -597,7 +628,17 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(collectionName, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            RecommendationRow(tmdbCollection, accentColor, onNavigateToDetails)
+                            RecommendationRow(
+                                            tmdbCollection, accentColor,
+                                            rowKey = "tmdb_collection",
+                                            onItemClick = { navType, navId, rowKey, index ->
+                                                restoreRowKey = rowKey
+                                                restoreIndex = index
+                                                onNavigateToDetails(navType, navId)
+                                            },
+                                            restoreIndex = if (restoreRowKey == "tmdb_collection") restoreIndex else -1,
+                                            restoreFocusRequester = if (restoreRowKey == "tmdb_collection") restoreFocusRequester else null
+                                        )
                         }
                     }
                 }
@@ -732,7 +773,15 @@ private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CastRow(leadingCrew: List<TmdbCastInfo>, cast: List<TmdbCastInfo>, accentColor: Color, textColor: Color) {
+private fun CastRow(
+    leadingCrew: List<TmdbCastInfo>,
+    cast: List<TmdbCastInfo>,
+    accentColor: Color,
+    textColor: Color,
+    onPersonClick: (personId: Int, personName: String, rowIndex: Int) -> Unit = { _, _, _ -> },
+    restoreIndex: Int = -1,
+    restoreFocusRequester: FocusRequester? = null
+) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -753,17 +802,25 @@ private fun CastRow(leadingCrew: List<TmdbCastInfo>, cast: List<TmdbCastInfo>, a
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
+            val hasDivider = leadingCrew.isNotEmpty() && cast.isNotEmpty()
+            val castOffset = leadingCrew.size + if (hasDivider) 1 else 0
+
             // Leading crew (directors, writers)
             itemsIndexed(leadingCrew, key = { i, it -> "crew_${it.tmdbId ?: i}" }) { index, member ->
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
-                    CastCard(member, accentColor, textColor)
+                    CastCard(
+                        member, accentColor, textColor,
+                        modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
+                    ) {
+                        member.tmdbId?.let { id -> onPersonClick(id, member.name, index) }
+                    }
                 }
             }
 
             // Vertical divider between crew and cast
-            if (leadingCrew.isNotEmpty() && cast.isNotEmpty()) {
+            if (hasDivider) {
                 item(key = "cast_divider") {
                     Box(
                         modifier = Modifier.height(110.dp),
@@ -782,10 +839,16 @@ private fun CastRow(leadingCrew: List<TmdbCastInfo>, cast: List<TmdbCastInfo>, a
             // Regular cast
             itemsIndexed(cast.take(20), key = { i, it -> "cast_${it.tmdbId ?: i}" }) { index, member ->
                 val isFirstOverall = leadingCrew.isEmpty() && index == 0
+                val flatIndex = castOffset + index
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && isFirstOverall) true else false
                 }) {
-                    CastCard(member, accentColor, textColor)
+                    CastCard(
+                        member, accentColor, textColor,
+                        modifier = if (restoreFocusRequester != null && flatIndex == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
+                    ) {
+                        member.tmdbId?.let { id -> onPersonClick(id, member.name, flatIndex) }
+                    }
                 }
             }
         }
@@ -794,7 +857,7 @@ private fun CastRow(leadingCrew: List<TmdbCastInfo>, cast: List<TmdbCastInfo>, a
 
 
 @Composable
-private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier) {
+private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "castScale")
@@ -808,6 +871,7 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color,
             .width(96.dp)
             .height(110.dp)
             .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.TopCenter
     ) {
@@ -1019,7 +1083,14 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: C
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, onItemClick: (type: String, id: String) -> Unit = { _, _ -> }) {
+private fun RecommendationRow(
+    items: List<TmdbMetaPreview>,
+    accentColor: Color,
+    rowKey: String = "",
+    onItemClick: (type: String, id: String, rowKey: String, index: Int) -> Unit = { _, _, _, _ -> },
+    restoreIndex: Int = -1,
+    restoreFocusRequester: FocusRequester? = null
+) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -1044,10 +1115,14 @@ private fun RecommendationRow(items: List<TmdbMetaPreview>, accentColor: Color, 
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
-                    RecommendationCard(item, accentColor, onClick = {
-                        val stremioType = if (item.type == "tv") "series" else item.type
-                        onItemClick(stremioType, "tmdb:${item.tmdbId}")
-                    })
+                    RecommendationCard(
+                        item, accentColor,
+                        modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier,
+                        onClick = {
+                            val stremioType = if (item.type == "tv") "series" else item.type
+                            onItemClick(stremioType, "tmdb:${item.tmdbId}", rowKey, index)
+                        }
+                    )
                 }
             }
         }

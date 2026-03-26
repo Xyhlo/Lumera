@@ -1497,6 +1497,30 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToDetails = { navType, navId ->
                                             val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
                                             detailsNavController.navigate(route)
+                                        },
+                                        onNavigateToCastDetail = { castPersonId, castPersonName ->
+                                            val route = "cast_detail/$castPersonId/${java.net.URLEncoder.encode(castPersonName, "UTF-8")}"
+                                            detailsNavController.navigate(route)
+                                        }
+                                    )
+                                }
+                                composable(
+                                    "cast_detail/{personId}/{personName}",
+                                    arguments = listOf(
+                                        navArgument("personId") { type = NavType.StringType },
+                                        navArgument("personName") { type = NavType.StringType }
+                                    )
+                                ) { backStackEntry ->
+                                    val castPersonId = (backStackEntry.arguments?.getString("personId") ?: "0").toIntOrNull() ?: 0
+                                    val castPersonName = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("personName") ?: "", "UTF-8")
+
+                                    com.lumera.app.ui.cast.CastDetailScreen(
+                                        personId = castPersonId,
+                                        personName = castPersonName,
+                                        onBackPress = { detailsNavController.popBackStack() },
+                                        onNavigateToDetails = { navType, navId ->
+                                            val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
+                                            detailsNavController.navigate(route)
                                         }
                                     )
                                 }
