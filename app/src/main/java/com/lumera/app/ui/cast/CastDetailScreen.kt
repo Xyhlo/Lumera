@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import com.lumera.app.ui.theme.LocalRoundCorners
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -186,20 +188,22 @@ private fun HeroSection(person: TmdbPersonDetail, accentColor: Color, textColor:
         horizontalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         // Profile photo
+        val roundCorners = LocalRoundCorners.current
+        val photoShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
         Box(
             modifier = Modifier
                 .width(160.dp)
                 .height(240.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(photoShape)
                 .background(Color.White.copy(0.08f))
-                .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                .border(1.dp, Color.White.copy(0.1f), photoShape)
         ) {
             if (person.profilePhoto != null) {
                 AsyncImage(
                     model = person.profilePhoto,
                     contentDescription = person.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                    modifier = Modifier.fillMaxSize().clip(photoShape)
                 )
             } else {
                 Text(
@@ -328,6 +332,8 @@ private fun FilmographyCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val roundCorners = LocalRoundCorners.current
+    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "filmScale")
@@ -337,12 +343,12 @@ private fun FilmographyCard(
             .width(120.dp)
             .height(180.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(cardShape)
             .background(Color.White.copy(0.06f))
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) accentColor else Color.Transparent,
-                shape = RoundedCornerShape(10.dp)
+                shape = cardShape
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
@@ -352,7 +358,7 @@ private fun FilmographyCard(
                 model = item.poster,
                 contentDescription = item.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                modifier = Modifier.fillMaxSize().clip(cardShape)
             )
         }
     }

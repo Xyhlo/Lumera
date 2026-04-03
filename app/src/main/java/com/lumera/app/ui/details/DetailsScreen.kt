@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import com.lumera.app.ui.theme.LocalRoundCorners
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
@@ -1009,6 +1011,8 @@ private fun TrailerRow(
 
 @Composable
 private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+    val roundCorners = LocalRoundCorners.current
+    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
@@ -1024,12 +1028,12 @@ private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Col
             modifier = Modifier
                 .fillMaxWidth()
                 .height(107.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(cardShape)
                 .background(Color.White.copy(0.06f))
                 .border(
                     width = if (isFocused) 2.dp else 0.dp,
                     color = if (isFocused) accentColor else Color.Transparent,
-                    shape = RoundedCornerShape(10.dp)
+                    shape = cardShape
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -1037,7 +1041,7 @@ private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Col
                 model = video.thumbnail,
                 contentDescription = video.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                modifier = Modifier.fillMaxSize().clip(cardShape)
             )
             // Play icon overlay
             Icon(
@@ -1198,6 +1202,8 @@ private fun RecommendationRow(
 
 @Composable
 private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+    val roundCorners = LocalRoundCorners.current
+    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
@@ -1207,12 +1213,12 @@ private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifi
             .width(120.dp)
             .height(180.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(cardShape)
             .background(Color.White.copy(0.06f))
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) accentColor else Color.Transparent,
-                shape = RoundedCornerShape(10.dp)
+                shape = cardShape
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
@@ -1222,7 +1228,7 @@ private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifi
                 model = item.poster,
                 contentDescription = item.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                modifier = Modifier.fillMaxSize().clip(cardShape)
             )
         }
     }
