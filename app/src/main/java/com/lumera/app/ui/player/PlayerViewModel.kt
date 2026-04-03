@@ -25,6 +25,7 @@ class PlayerViewModel @Inject constructor(
         duration: Long?
     ) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            if (id.startsWith("trailer_")) return@launch
             val safePosition = position.coerceAtLeast(0L)
             if (safePosition < 5_000L) return@launch
 

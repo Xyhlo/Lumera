@@ -110,6 +110,9 @@ fun DetailsScreen(
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
     onNavigateToDetails: (type: String, id: String) -> Unit = { _, _ -> },
     onNavigateToCastDetail: (personId: Int, personName: String) -> Unit = { _, _ -> },
+    onNavigateToStudioDetail: (entityId: Int, entityKind: String, entityName: String, sourceType: String) -> Unit = { _, _, _, _ -> },
+    onTrailerClick: (youtubeKey: String, trailerName: String) -> Unit = { _, _ -> },
+    trailerReturnToken: Int = 0,
     viewModel: DetailsViewModel = hiltViewModel(key = "details_${type}_${id}")
 ) {
     LaunchedEffect(type, id) { viewModel.loadDetails(type, id, addonBaseUrl) }
@@ -211,16 +214,26 @@ fun DetailsScreen(
 
     LaunchedEffect(contentReady) {
         if (contentReady) {
-            kotlinx.coroutines.delay(200)
             if (restoreRowKey != null) {
-                // Back navigation: restore focus to the item that was clicked
+                // Back navigation from Jetpack Nav: restore focus
+                kotlinx.coroutines.delay(400)
                 runCatching { restoreFocusRequester.requestFocus() }
                 restoreRowKey = null
                 restoreIndex = -1
             } else {
                 // First load: focus hero button
+                kotlinx.coroutines.delay(200)
                 runCatching { firstButtonFocusRequester.requestFocus() }
             }
+        }
+    }
+
+    // Restore focus when returning from trailer playback
+    LaunchedEffect(trailerReturnToken) {
+        if (trailerReturnToken > 0 && restoreRowKey != null) {
+            runCatching { restoreFocusRequester.requestFocus() }
+            restoreRowKey = null
+            restoreIndex = -1
         }
     }
 
@@ -568,7 +581,16 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            TrailerRow(tmdbVideos, accentColor, textColor)
+                            TrailerRow(
+                                tmdbVideos, accentColor, textColor,
+                                onTrailerClick = { key, name, index ->
+                                    restoreRowKey = "tmdb_trailers"
+                                    restoreIndex = index
+                                    onTrailerClick(key, name)
+                                },
+                                restoreIndex = if (restoreRowKey == "tmdb_trailers") restoreIndex else -1,
+                                restoreFocusRequester = if (restoreRowKey == "tmdb_trailers") restoreFocusRequester else null
+                            )
                         }
                     }
                 }
@@ -582,12 +604,24 @@ fun DetailsScreen(
                 val secondStudios = if (isTvShow) companies else networkCompanies
                 val secondLabel = if (isTvShow) "Production" else "Network"
 
+                val firstStudioKind = if (isTvShow) "network" else "company"
+                val secondStudioKind = if (isTvShow) "company" else "network"
+
                 if (firstStudios.isNotEmpty()) {
                     item(key = "tmdb_studios_first") {
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(firstLabel, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            StudioRow(firstStudios, textColor, accentColor)
+                            StudioRow(
+                                firstStudios, textColor, accentColor,
+                                onStudioClick = { studioId, studioName ->
+                                    restoreRowKey = "tmdb_studios_first"
+                                    restoreIndex = firstStudios.indexOfFirst { it.tmdbId == studioId }
+                                    onNavigateToStudioDetail(studioId, firstStudioKind, studioName, type)
+                                },
+                                restoreIndex = if (restoreRowKey == "tmdb_studios_first") restoreIndex else -1,
+                                restoreFocusRequester = if (restoreRowKey == "tmdb_studios_first") restoreFocusRequester else null
+                            )
                         }
                     }
                 }
@@ -597,7 +631,16 @@ fun DetailsScreen(
                         Column(modifier = Modifier.padding(top = 28.dp)) {
                             SectionHeader(secondLabel, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
-                            StudioRow(secondStudios, textColor, accentColor)
+                            StudioRow(
+                                secondStudios, textColor, accentColor,
+                                onStudioClick = { studioId, studioName ->
+                                    restoreRowKey = "tmdb_studios_second"
+                                    restoreIndex = secondStudios.indexOfFirst { it.tmdbId == studioId }
+                                    onNavigateToStudioDetail(studioId, secondStudioKind, studioName, type)
+                                },
+                                restoreIndex = if (restoreRowKey == "tmdb_studios_second") restoreIndex else -1,
+                                restoreFocusRequester = if (restoreRowKey == "tmdb_studios_second") restoreFocusRequester else null
+                            )
                         }
                     }
                 }
@@ -922,7 +965,14 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color,
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColor: Color) {
+private fun TrailerRow(
+    videos: List<TmdbVideoInfo>,
+    accentColor: Color,
+    textColor: Color,
+    onTrailerClick: (key: String, name: String, index: Int) -> Unit = { _, _, _ -> },
+    restoreIndex: Int = -1,
+    restoreFocusRequester: FocusRequester? = null
+) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -947,7 +997,10 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
                 Box(modifier = Modifier.onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
-                    TrailerCard(video, accentColor, textColor)
+                    TrailerCard(
+                        video, accentColor, textColor,
+                        modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
+                    ) { onTrailerClick(video.key, video.name, index) }
                 }
             }
         }
@@ -955,7 +1008,7 @@ private fun TrailerRow(videos: List<TmdbVideoInfo>, accentColor: Color, textColo
 }
 
 @Composable
-private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier) {
+private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
@@ -964,6 +1017,7 @@ private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Col
         modifier = modifier
             .width(190.dp)
             .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
     ) {
         Box(
@@ -1010,7 +1064,14 @@ private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Col
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color, accentColor: Color) {
+private fun StudioRow(
+    studios: List<TmdbCompanyInfo>,
+    textColor: Color,
+    accentColor: Color,
+    onStudioClick: (tmdbId: Int, name: String) -> Unit = { _, _ -> },
+    restoreIndex: Int = -1,
+    restoreFocusRequester: FocusRequester? = null
+) {
     val rowState = rememberLazyListState()
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -1031,21 +1092,26 @@ private fun StudioRow(studios: List<TmdbCompanyInfo>, textColor: Color, accentCo
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
-            items(studios, key = { "${it.tmdbId}:${it.name}" }) { studio ->
-                StudioChip(studio, textColor, accentColor)
+            itemsIndexed(studios, key = { _, it -> "${it.tmdbId}:${it.name}" }) { index, studio ->
+                StudioChip(
+                    studio, textColor, accentColor,
+                    modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
+                ) {
+                    studio.tmdbId?.let { id -> onStudioClick(id, studio.name) }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: Color) {
+private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "studioScale")
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(140.dp)
             .height(56.dp)
             .scale(scale)
@@ -1056,6 +1122,7 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: C
                 color = if (isFocused) accentColor else Color.Transparent,
                 shape = RoundedCornerShape(12.dp)
             )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.Center
     ) {

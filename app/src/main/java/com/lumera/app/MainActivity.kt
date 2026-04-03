@@ -861,6 +861,7 @@ class MainActivity : ComponentActivity() {
             var selectedMovieLogo by rememberSaveable { mutableStateOf("") }
             var selectedAddonBaseUrl by rememberSaveable { mutableStateOf<String?>(null) }
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
+            var trailerReturnToken by rememberSaveable { mutableStateOf(0) }
             var selectedPlaybackId by rememberSaveable { mutableStateOf("") }
             var selectedPlaybackType by rememberSaveable { mutableStateOf("movie") }
             var selectedPlaybackTitle by rememberSaveable { mutableStateOf("") }
@@ -1377,7 +1378,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                        } else if (view == "details") {
+                        } else if (view == "details" || (view == "player" && selectedPlaybackId.startsWith("trailer_"))) {
                             val detailsNavController = rememberNavController()
                             val startRoute = "detail/${java.net.URLEncoder.encode(selectedMovieType, "UTF-8")}/${java.net.URLEncoder.encode(selectedMovieId, "UTF-8")}?addon=${java.net.URLEncoder.encode(selectedAddonBaseUrl ?: "", "UTF-8")}&resume=${java.net.URLEncoder.encode(detailsResumePlaybackHint ?: "", "UTF-8")}"
 
@@ -1505,6 +1506,23 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToStudioDetail = { entityId, entityKind, entityName, sourceType ->
                                             val route = "studio_detail/$entityId/$entityKind/${java.net.URLEncoder.encode(entityName, "UTF-8")}/$sourceType"
                                             detailsNavController.navigate(route)
+                                        },
+                                        trailerReturnToken = trailerReturnToken,
+                                        onTrailerClick = { youtubeKey, trailerName ->
+                                            uiScope.launch {
+                                                val extractor = com.lumera.app.data.trailer.YouTubeExtractor()
+                                                val source = extractor.extractPlaybackSource(youtubeKey)
+                                                if (source != null) {
+                                                    selectedVideoUrl = source.videoUrl
+                                                    selectedPlaybackId = "trailer_$youtubeKey"
+                                                    selectedPlaybackType = selectedMovieType
+                                                    selectedPlaybackTitle = trailerName
+                                                    selectedPlaybackPoster = selectedMoviePoster
+                                                    playerState.selectedPlayerSubtitles = emptyList()
+                                                    playerState.selectedPlayerSources = emptyList()
+                                                    activeView = "player"
+                                                }
+                                            }
                                         }
                                     )
                                 }
@@ -1555,7 +1573,8 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                        } else if (view == "player") {
+                        }
+                        if (view == "player") {
                             if (selectedVideoUrl.isBlank() && torrentProgress == null) {
                                 LaunchedEffect(Unit) { activeView = "details" }
                             } else {
@@ -2116,6 +2135,9 @@ class MainActivity : ComponentActivity() {
                                         rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true
                                     )
                                     stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                    if (selectedPlaybackId.startsWith("trailer_")) {
+                                        trailerReturnToken++
+                                    }
                                     activeView = "details"
                                 }
                             )

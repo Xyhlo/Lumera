@@ -87,6 +87,27 @@ data class TmdbPersonDetail(
 )
 
 /**
+ * Company/Network detail with discover rails.
+ */
+data class TmdbEntityDetail(
+    val tmdbId: Int,
+    val kind: String, // "company" or "network"
+    val name: String,
+    val logo: String?,
+    val originCountry: String?,
+    val headquarters: String?,
+    val description: String?
+)
+
+data class TmdbDiscoverRail(
+    val mediaType: String, // "movie" or "tv"
+    val railType: String, // "popular", "top_rated", "recent"
+    val items: List<TmdbMetaPreview>,
+    val currentPage: Int = 1,
+    val hasMore: Boolean = false
+)
+
+/**
  * Video/trailer info.
  */
 data class TmdbVideoInfo(

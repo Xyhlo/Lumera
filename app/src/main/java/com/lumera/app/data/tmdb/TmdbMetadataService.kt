@@ -454,6 +454,88 @@ class TmdbMetadataService @Inject constructor(
         }
     }
 
+    /**
+     * Fetch company or network detail.
+     */
+    suspend fun fetchEntityDetail(
+        entityId: Int,
+        kind: String // "company" or "network"
+    ): TmdbEntityDetail? = withContext(Dispatchers.IO) {
+        try {
+            if (kind == "network") {
+                val resp = tmdbApi.getNetworkDetails(entityId, apiKey).body() ?: return@withContext null
+                TmdbEntityDetail(
+                    tmdbId = resp.id, kind = kind, name = resp.name ?: "Unknown",
+                    logo = buildImageUrl(resp.logoPath, "w500"),
+                    originCountry = resp.originCountry?.takeIf { it.isNotBlank() },
+                    headquarters = resp.headquarters?.takeIf { it.isNotBlank() },
+                    description = null
+                )
+            } else {
+                val resp = tmdbApi.getCompanyDetails(entityId, apiKey).body() ?: return@withContext null
+                TmdbEntityDetail(
+                    tmdbId = resp.id, kind = kind, name = resp.name ?: "Unknown",
+                    logo = buildImageUrl(resp.logoPath, "w500"),
+                    originCountry = resp.originCountry?.takeIf { it.isNotBlank() },
+                    headquarters = resp.headquarters?.takeIf { it.isNotBlank() },
+                    description = resp.description?.takeIf { it.isNotBlank() }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch $kind detail $entityId: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Fetch discover results for a company or network.
+     */
+    suspend fun fetchDiscover(
+        entityId: Int,
+        kind: String,
+        mediaType: String,
+        sortBy: String,
+        page: Int = 1,
+        voteCountGte: Int? = null,
+        dateLte: String? = null,
+        language: String = "en"
+    ): Pair<List<TmdbMetaPreview>, Int> = withContext(Dispatchers.IO) {
+        try {
+            val normalizedLanguage = normalizeTmdbLanguage(language)
+            val resp = if (mediaType == "movie") {
+                tmdbApi.discoverMovies(
+                    apiKey = apiKey, language = normalizedLanguage, page = page,
+                    sortBy = sortBy, withCompanies = entityId.toString(),
+                    releaseDateLte = dateLte, voteCountGte = voteCountGte
+                ).body()
+            } else {
+                tmdbApi.discoverTv(
+                    apiKey = apiKey, language = normalizedLanguage, page = page,
+                    sortBy = sortBy,
+                    withCompanies = if (kind == "company") entityId.toString() else null,
+                    withNetworks = if (kind == "network") entityId.toString() else null,
+                    firstAirDateLte = dateLte, voteCountGte = voteCountGte
+                ).body()
+            }
+            val items = resp?.results?.mapNotNull { r ->
+                val title = (if (mediaType == "tv") r.name ?: r.title else r.title ?: r.name) ?: return@mapNotNull null
+                val poster = buildImageUrl(r.posterPath, "w500") ?: return@mapNotNull null
+                val year = if (mediaType == "tv") r.firstAirDate?.take(4) else r.releaseDate?.take(4)
+                TmdbMetaPreview(
+                    tmdbId = r.id, type = if (mediaType == "tv") "series" else "movie",
+                    name = title, poster = poster,
+                    backdrop = buildImageUrl(r.backdropPath, "w1280"),
+                    description = r.overview?.takeIf { it.isNotBlank() },
+                    releaseInfo = year, rating = r.voteAverage
+                )
+            } ?: emptyList()
+            Pair(items, resp?.totalPages ?: 1)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to discover $mediaType for $kind $entityId: ${e.message}")
+            Pair(emptyList(), 1)
+        }
+    }
+
     // ── Private helpers ──
 
     private fun mapCredits(
