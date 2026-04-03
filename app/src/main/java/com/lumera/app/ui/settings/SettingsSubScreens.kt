@@ -489,6 +489,16 @@ fun PlaybackSettings(
                 onBack = onGoBack,
                 focusRequester = subtitleStyleFR
             )
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingToggleRow(
+                label = "Styled ASS/SSA Subtitles",
+                subtitle = "Render ASS/SSA subtitles with full styling via libass (experimental)",
+                isChecked = currentProfile.assRendererEnabled,
+                onCheckedChange = { viewModel.updateAssRendererEnabled(currentProfile.id, it) },
+                onBack = onGoBack
+            )
         }
 
         // Subtitle style sidebar

@@ -21,7 +21,7 @@ import com.lumera.app.data.model.WatchHistoryEntity
         HubRowEntity::class,
         HubRowItemEntity::class
     ],
-    version = 36
+    version = 37
 )
 abstract class LumeraDatabase : RoomDatabase() {
     abstract fun addonDao(): AddonDao

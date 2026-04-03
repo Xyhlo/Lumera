@@ -63,6 +63,7 @@ data class ProfileEntity(
     val subtitleOffset: Int = 0,                     // -20 to 20%
     val subtitleTextColor: Long = 0xFFFFFFFFL,       // White (ARGB)
     val subtitleBackgroundColor: Long = 0x00000000L, // Transparent
+    val assRendererEnabled: Boolean = false,          // Styled ASS/SSA subtitles via libass
 
     // TMDB integration
     val tmdbEnabled: Boolean = false,

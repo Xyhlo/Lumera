@@ -102,6 +102,9 @@ composeCompiler {
 }
 
 dependencies {
+    // 0. ASS/SSA subtitle renderer
+    implementation(project(":assrender"))
+
     // 1. Android TV UI (Compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

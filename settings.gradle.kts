@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 rootProject.name = "Lumera"
 include(":app")
 include(":playbackcore")
+include(":assrender")
+project(":assrender").projectDir = file("../assrender/assrender")

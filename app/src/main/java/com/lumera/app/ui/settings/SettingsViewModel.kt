@@ -189,6 +189,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun updateAssRendererEnabled(profileId: Int, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(assRendererEnabled = enabled))
+        }
+    }
+
     fun updateSourceSortingEnabled(profileId: Int, enabled: Boolean) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val profile = dao.getProfileById(profileId)

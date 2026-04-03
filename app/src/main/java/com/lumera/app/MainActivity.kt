@@ -1501,6 +1501,10 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToCastDetail = { castPersonId, castPersonName ->
                                             val route = "cast_detail/$castPersonId/${java.net.URLEncoder.encode(castPersonName, "UTF-8")}"
                                             detailsNavController.navigate(route)
+                                        },
+                                        onNavigateToStudioDetail = { entityId, entityKind, entityName, sourceType ->
+                                            val route = "studio_detail/$entityId/$entityKind/${java.net.URLEncoder.encode(entityName, "UTF-8")}/$sourceType"
+                                            detailsNavController.navigate(route)
                                         }
                                     )
                                 }
@@ -1517,6 +1521,32 @@ class MainActivity : ComponentActivity() {
                                     com.lumera.app.ui.cast.CastDetailScreen(
                                         personId = castPersonId,
                                         personName = castPersonName,
+                                        onBackPress = { detailsNavController.popBackStack() },
+                                        onNavigateToDetails = { navType, navId ->
+                                            val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
+                                            detailsNavController.navigate(route)
+                                        }
+                                    )
+                                }
+                                composable(
+                                    "studio_detail/{entityId}/{entityKind}/{entityName}/{sourceType}",
+                                    arguments = listOf(
+                                        navArgument("entityId") { type = NavType.StringType },
+                                        navArgument("entityKind") { type = NavType.StringType },
+                                        navArgument("entityName") { type = NavType.StringType },
+                                        navArgument("sourceType") { type = NavType.StringType }
+                                    )
+                                ) { backStackEntry ->
+                                    val studioEntityId = (backStackEntry.arguments?.getString("entityId") ?: "0").toIntOrNull() ?: 0
+                                    val studioEntityKind = backStackEntry.arguments?.getString("entityKind") ?: "company"
+                                    val studioEntityName = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("entityName") ?: "", "UTF-8")
+                                    val studioSourceType = backStackEntry.arguments?.getString("sourceType") ?: "movie"
+
+                                    com.lumera.app.ui.studio.StudioDetailScreen(
+                                        entityId = studioEntityId,
+                                        entityKind = studioEntityKind,
+                                        entityName = studioEntityName,
+                                        sourceType = studioSourceType,
                                         onBackPress = { detailsNavController.popBackStack() },
                                         onNavigateToDetails = { navType, navId ->
                                             val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
@@ -1620,7 +1650,8 @@ class MainActivity : ComponentActivity() {
                                     subtitleSize = currentProfile?.subtitleSize ?: 100,
                                     subtitleOffset = currentProfile?.subtitleOffset ?: 0,
                                     subtitleTextColor = currentProfile?.subtitleTextColor?.toInt() ?: 0xFFFFFFFF.toInt(),
-                                    subtitleBackgroundColor = currentProfile?.subtitleBackgroundColor?.toInt() ?: 0x00000000
+                                    subtitleBackgroundColor = currentProfile?.subtitleBackgroundColor?.toInt() ?: 0x00000000,
+                                    assRendererEnabled = currentProfile?.assRendererEnabled ?: false
                                 ),
                                 skipSegmentInfo = skipSegmentInfo,
                                 nextEpisodeInfo = if (nextEpisode != null) nextEpisodeInfo else null,
