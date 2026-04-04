@@ -66,12 +66,28 @@ class TraktSyncManager @Inject constructor(
     }
 
     /**
-     * Full bidirectional watchlist sync with diff.
-     *
-     * Strategy:
-     * 1. Push local items missing on Trakt → Trakt
-     * 2. Pull Trakt items missing locally → local DB
-     * 3. Remove local items that are no longer on Trakt (deleted externally)
+     * Initial sync after first connecting Trakt.
+     * Pushes all local items to Trakt, then does a normal sync.
+     */
+    suspend fun initialSync() = syncMutex.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                val localItems = dao.getWatchlistOnce()
+                if (localItems.isNotEmpty()) {
+                    pushToTrakt(localItems)
+                    Log.d(TAG, "Initial push: ${localItems.size} items")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Initial push failed: ${e.message}")
+            }
+        }
+        syncWatchlist()
+    }
+
+    /**
+     * Periodic watchlist sync with diff.
+     * Pulls new items and removes items deleted on Trakt.
+     * Does NOT push — local adds are pushed instantly via pushAdd().
      */
     suspend fun syncWatchlist(): Result<Unit> = syncMutex.withLock {
         withContext(Dispatchers.IO) {
@@ -98,14 +114,7 @@ class TraktSyncManager @Inject constructor(
 
                 val localImdbIds = localItems.map { it.id }.toSet()
 
-                // 4. Push local → Trakt (items in local but not on Trakt)
-                val toPush = localItems.filter { it.id !in traktImdbIds }
-                if (toPush.isNotEmpty()) {
-                    pushToTrakt(toPush)
-                    Log.d(TAG, "Pushed ${toPush.size} items to Trakt")
-                }
-
-                // 5. Pull Trakt → local (items on Trakt but not local)
+                // 4. Pull Trakt → local (items on Trakt but not local)
                 val toPull = traktItems.filter { item ->
                     val imdbId = when (item.type) {
                         "movie" -> item.movie?.ids?.imdb
@@ -119,16 +128,16 @@ class TraktSyncManager @Inject constructor(
                     Log.d(TAG, "Pulled ${toPull.size} items from Trakt")
                 }
 
-                // 6. Remove local items no longer on Trakt (deleted externally)
-                // Only do this after push succeeded — so we don't delete items
-                // that just haven't been pushed yet.
-                val toRemove = localItems.filter { it.id !in traktImdbIds && it.id !in toPush.map { p -> p.id }.toSet() }
+                // 5. Remove local items no longer on Trakt (deleted externally).
+                // Local adds are pushed instantly via pushAdd(), so anything
+                // local but missing from Trakt was removed on Trakt's side.
+                val toRemove = localItems.filter { it.id !in traktImdbIds }
                 for (item in toRemove) {
                     dao.removeFromWatchlist(item.id)
                     Log.d(TAG, "Removed ${item.title} (deleted on Trakt)")
                 }
 
-                Log.i(TAG, "Sync complete: pushed=${toPush.size}, pulled=${toPull.size}, removed=${toRemove.size}")
+                Log.i(TAG, "Sync complete: pulled=${toPull.size}, removed=${toRemove.size}")
                 Result.success(Unit)
             } catch (e: Exception) {
                 Log.e(TAG, "Watchlist sync failed", e)

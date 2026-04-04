@@ -73,9 +73,9 @@ class IntegrationsViewModel @Inject constructor(
         viewModelScope.launch {
             traktAuthManager.authState.collect { authState ->
                 _uiState.value = _uiState.value.copy(traktAuthState = authState)
-                // Auto-sync watchlist after successful auth
+                // Push existing local watchlist + pull from Trakt after first auth
                 if (authState is DeviceAuthState.Success) {
-                    traktSyncManager.syncWatchlist()
+                    traktSyncManager.initialSync()
                 }
             }
         }

@@ -1,6 +1,7 @@
 package com.lumera.app.data.remote
 
 import com.lumera.app.data.model.trakt.TraktLastActivities
+import com.lumera.app.data.model.trakt.TraktScrobbleRequest
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktSyncResponse
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
@@ -34,4 +35,21 @@ interface TraktSyncApiService {
     suspend fun removeFromWatchlist(
         @Body body: TraktSyncRequest
     ): Response<TraktSyncResponse>
+
+    // ── Scrobble ──
+
+    @POST("scrobble/start")
+    suspend fun scrobbleStart(
+        @Body body: TraktScrobbleRequest
+    ): Response<Unit>
+
+    @POST("scrobble/pause")
+    suspend fun scrobblePause(
+        @Body body: TraktScrobbleRequest
+    ): Response<Unit>
+
+    @POST("scrobble/stop")
+    suspend fun scrobbleStop(
+        @Body body: TraktScrobbleRequest
+    ): Response<Unit>
 }

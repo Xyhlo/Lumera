@@ -101,6 +101,16 @@ fun PlayerScreen(
         }
     }
 
+    // Trakt scrobble: start when playing, pause when paused
+    LaunchedEffect(uiState.isPlaying) {
+        if (uiState.durationMs <= 0L) return@LaunchedEffect
+        if (uiState.isPlaying) {
+            viewModel.scrobbleStart(movieId, mediaType, uiState.positionMs, uiState.durationMs)
+        } else if (uiState.isReady) {
+            viewModel.scrobblePause(movieId, mediaType, uiState.positionMs, uiState.durationMs)
+        }
+    }
+
     DisposableEffect(playbackController) {
         onDispose {
             playbackController.release()
@@ -180,6 +190,11 @@ fun PlayerScreen(
             position.toDouble() / duration.toDouble()
         } else {
             0.0
+        }
+
+        // Trakt: scrobble stop on exit
+        if (!hasError && duration != null && duration > 0L) {
+            viewModel.scrobbleStop(movieId, mediaType, position, duration)
         }
 
         // Don't save progress when exiting due to error

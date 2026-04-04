@@ -80,3 +80,26 @@ data class TraktLastActivities(
 data class TraktActivityTimestamp(
     @SerializedName("updated_at") val updatedAt: String?
 )
+
+/**
+ * Request body for POST /scrobble/start, /scrobble/pause, /scrobble/stop.
+ */
+data class TraktScrobbleRequest(
+    val movie: TraktScrobbleMovie? = null,
+    val show: TraktScrobbleShow? = null,
+    val episode: TraktScrobbleEpisode? = null,
+    val progress: Float
+)
+
+data class TraktScrobbleMovie(
+    val ids: TraktIds
+)
+
+data class TraktScrobbleShow(
+    val ids: TraktIds
+)
+
+data class TraktScrobbleEpisode(
+    val season: Int,
+    val number: Int
+)

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.profile.ProfileConfigurationManager
+import com.lumera.app.data.trakt.TraktScrobbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val dao: AddonDao,
-    private val profileConfigurationManager: ProfileConfigurationManager
+    private val profileConfigurationManager: ProfileConfigurationManager,
+    private val traktScrobbleManager: TraktScrobbleManager
 ) : ViewModel() {
 
     fun saveProgress(
@@ -63,6 +65,26 @@ class PlayerViewModel @Inject constructor(
             if (existing != null) {
                 dao.upsertHistory(existing.copy(watched = true, lastWatched = System.currentTimeMillis()))
             }
+        }
+    }
+
+    // ── Trakt Scrobbling ──
+
+    fun scrobbleStart(id: String, type: String, positionMs: Long, durationMs: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            traktScrobbleManager.scrobbleStart(id, type, positionMs, durationMs)
+        }
+    }
+
+    fun scrobblePause(id: String, type: String, positionMs: Long, durationMs: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            traktScrobbleManager.scrobblePause(id, type, positionMs, durationMs)
+        }
+    }
+
+    fun scrobbleStop(id: String, type: String, positionMs: Long, durationMs: Long) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            traktScrobbleManager.scrobbleStop(id, type, positionMs, durationMs)
         }
     }
 
