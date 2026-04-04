@@ -1,8 +1,12 @@
 package com.lumera.app.ui.details
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,8 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import com.lumera.app.ui.theme.LocalRoundCorners
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,7 +51,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -58,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -182,7 +191,19 @@ fun DetailsScreen(
     }
 
     val firstButtonFocusRequester = remember { FocusRequester() }
+    val episodesButtonFocusRequester = remember { FocusRequester() }
     val restoreFocusRequester = remember { FocusRequester() }
+
+    // Track the previous sidebar state so we can restore focus to the
+    // episodes button when the episodes sidebar closes.
+    var previousSidebarState by remember { mutableStateOf<SidebarState>(SidebarState.Closed) }
+    LaunchedEffect(sidebarState) {
+        if (sidebarState is SidebarState.Closed && previousSidebarState is SidebarState.Episodes) {
+            kotlinx.coroutines.delay(50)
+            runCatching { episodesButtonFocusRequester.requestFocus() }
+        }
+        previousSidebarState = sidebarState
+    }
     var restoreRowKey by rememberSaveable { mutableStateOf<String?>(null) }
     var restoreIndex by rememberSaveable { mutableStateOf(-1) }
     val listState = rememberLazyListState()
@@ -444,26 +465,39 @@ fun DetailsScreen(
                 // No onNavigateDown — Compose's default DOWN navigation
                 // handles hero→row transitions reliably after disposal/recomposition.
 
-                if (type == "series") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val playLabel = if (resumePlaybackId != null) {
-                            val resumeSeason = resumeEpisode?.season?.takeIf { it > 0 } ?: parsedResumeSeasonEpisode?.first
-                            val resumeNumber = resumeEpisode?.episode?.takeIf { it > 0 } ?: parsedResumeSeasonEpisode?.second
-                            if (resumeSeason != null && resumeNumber != null) {
-                                "Resume S${resumeSeason} E${resumeNumber}"
-                            } else {
-                                "Resume"
-                            }
-                        } else {
-                            "Play S${firstEpisodeSeason} E${firstEpisodeNumber}"
-                        }
+                val isInWatchlist by viewModel.isInWatchlist.collectAsState()
 
-                        VoidActionButton(
+                if (type == "series") {
+                    val playLabel = if (resumePlaybackId != null) {
+                        val resumeSeason = resumeEpisode?.season?.takeIf { it > 0 } ?: parsedResumeSeasonEpisode?.first
+                        val resumeNumber = resumeEpisode?.episode?.takeIf { it > 0 } ?: parsedResumeSeasonEpisode?.second
+                        if (resumeSeason != null && resumeNumber != null) {
+                            "Resume S${resumeSeason} E${resumeNumber}"
+                        } else {
+                            "Resume"
+                        }
+                    } else {
+                        "Play S${firstEpisodeSeason} E${firstEpisodeNumber}"
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                // Redirect focus to the Play button before the system
+                                // resolves the Down target, so the below-hero content
+                                // always receives focus from the same horizontal position.
+                                firstButtonFocusRequester.requestFocus()
+                            }
+                            false
+                        }
+                    ) {
+                        ExpandableIconButton(
                             label = playLabel,
                             icon = Icons.Default.PlayArrow,
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
-                                val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
+                                val ep = resumeEpisode ?: firstEpisode ?: return@ExpandableIconButton
                                 val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
                                 val epStreamId = episodeStreamId(streamId, ep)
                                 val epTitle = when {
@@ -480,14 +514,22 @@ fun DetailsScreen(
                             }
                         )
 
-                        VoidActionButton(
-                            label = "More Episodes",
-                            icon = Icons.Default.List,
+                        ExpandableIconButton(
+                            label = "Episodes",
+                            icon = Icons.AutoMirrored.Filled.List,
+                            modifier = Modifier.focusRequester(episodesButtonFocusRequester),
                             onClick = { viewModel.openEpisodes() }
                         )
 
+                        ExpandableIconButton(
+                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
+                            icon = if (isInWatchlist) Icons.Default.Check else Icons.Default.Add,
+                            isActive = isInWatchlist,
+                            onClick = { viewModel.toggleWatchlist() }
+                        )
+
                         if (resumePlaybackId != null || state.progressCleared) {
-                            VoidActionButton(
+                            ExpandableIconButton(
                                 label = if (state.progressCleared) "Undo" else "Clear Progress",
                                 icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
                                 onClick = {
@@ -501,8 +543,16 @@ fun DetailsScreen(
                         }
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        VoidActionButton(
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                firstButtonFocusRequester.requestFocus()
+                            }
+                            false
+                        }
+                    ) {
+                        ExpandableIconButton(
                             label = if (resumePlaybackId != null) "Resume" else "Play Movie",
                             icon = Icons.Default.PlayArrow,
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
@@ -514,8 +564,15 @@ fun DetailsScreen(
                             }
                         )
 
+                        ExpandableIconButton(
+                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
+                            icon = if (isInWatchlist) Icons.Default.Check else Icons.Default.Add,
+                            isActive = isInWatchlist,
+                            onClick = { viewModel.toggleWatchlist() }
+                        )
+
                         if (resumePlaybackId != null || state.progressCleared) {
-                            VoidActionButton(
+                            ExpandableIconButton(
                                 label = if (state.progressCleared) "Undo" else "Clear Progress",
                                 icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
                                 onClick = {
@@ -530,7 +587,7 @@ fun DetailsScreen(
 
                         // Works around a Compose focus-tree bug where requestFocus()
                         // silently fails when a container has a single focusable child.
-                        if (resumePlaybackId == null && !state.progressCleared) {
+                        if (resumePlaybackId == null && !state.progressCleared && !isInWatchlist) {
                             Spacer(modifier = Modifier
                                 .size(0.dp)
                                 .onFocusChanged {
@@ -556,12 +613,20 @@ fun DetailsScreen(
                 val tmdbCollection = state.tmdbCollection
 
                 val leadingCrew = directorMembers + writerMembers
+                // Modifier applied to the first TMDB section so Up always returns to the Play button
+                var firstSectionClaimed = false
+                fun firstSectionModifier(): Modifier {
+                    if (firstSectionClaimed) return Modifier
+                    firstSectionClaimed = true
+                    return Modifier.focusProperties { up = firstButtonFocusRequester }
+                }
+
                 if (castMembers.isNotEmpty() || leadingCrew.isNotEmpty()) {
                     item(key = "tmdb_cast") {
                         val title = if (leadingCrew.isNotEmpty() && castMembers.isNotEmpty()) "Director & Cast"
                             else if (leadingCrew.isNotEmpty()) "Director"
                             else "Cast"
-                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                        Column(modifier = firstSectionModifier().padding(top = 28.dp)) {
                             SectionHeader(title, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             CastRow(
@@ -580,7 +645,7 @@ fun DetailsScreen(
 
                 if (tmdbVideos.isNotEmpty()) {
                     item(key = "tmdb_trailers") {
-                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                        Column(modifier = firstSectionModifier().padding(top = 28.dp)) {
                             SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             TrailerRow(
@@ -611,7 +676,7 @@ fun DetailsScreen(
 
                 if (firstStudios.isNotEmpty()) {
                     item(key = "tmdb_studios_first") {
-                        Column(modifier = Modifier.padding(top = 28.dp)) {
+                        Column(modifier = firstSectionModifier().padding(top = 28.dp)) {
                             SectionHeader(firstLabel, textColor, Modifier.padding(start = 48.dp))
                             Spacer(modifier = Modifier.height(10.dp))
                             StudioRow(
@@ -739,50 +804,121 @@ fun DetailsScreen(
     }
 }
 
+/**
+ * TV-style icon button that expands to reveal a text label on focus.
+ * Mirrors the TopNavItem bubble-expand pattern.
+ */
 @Composable
-private fun VoidActionButton(
+private fun ExpandableIconButton(
     label: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isActive: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "btnScale")
     val accentColor = MaterialTheme.colorScheme.primary
+
+    val showText = isFocused
+
+    // Estimate expanded width: icon(18) + padding(12+12) + gap(8) + text
+    // ~8dp per uppercase character is a reasonable estimate for labelMedium Bold
+    val expandedWidth = (42 + 8 + (label.uppercase().length * 8)).coerceIn(80, 220).dp
+
+    // Bubble width: icon-only → icon + label
+    val bubbleWidth by animateDpAsState(
+        targetValue = if (showText) expandedWidth else 42.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "bubbleWidth"
+    )
+
+    // Text fade + slide
+    val textAlpha by animateFloatAsState(
+        targetValue = if (showText) 1f else 0f,
+        animationSpec = tween(200),
+        label = "textAlpha"
+    )
+    val textOffset by animateDpAsState(
+        targetValue = if (showText) 0.dp else (-8).dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "textOffset"
+    )
+
+    // Icon and border colors
+    val iconColor by animateColorAsState(
+        targetValue = when {
+            isFocused -> accentColor
+            isActive -> accentColor
+            else -> Color.White.copy(alpha = 0.7f)
+        },
+        animationSpec = tween(200),
+        label = "iconColor"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            isFocused -> accentColor
+            isActive -> accentColor.copy(alpha = 0.5f)
+            else -> Color.White.copy(alpha = 0.15f)
+        },
+        animationSpec = tween(200),
+        label = "borderColor"
+    )
+    val bgColor by animateColorAsState(
+        targetValue = when {
+            isFocused -> accentColor.copy(alpha = 0.15f)
+            isActive -> accentColor.copy(alpha = 0.08f)
+            else -> Color.White.copy(alpha = 0.07f)
+        },
+        animationSpec = tween(200),
+        label = "bgColor"
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.05f else 1f,
+        label = "btnScale"
+    )
 
     Row(
         modifier = modifier
-            .height(40.dp)
+            .width(bubbleWidth)
+            .height(42.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(0.07f))
+            .clip(RoundedCornerShape(21.dp))
+            .background(bgColor)
             .border(
-                if (isFocused) 2.dp else 1.dp,
-                if (isFocused) accentColor else Color.White.copy(0.15f),
-                RoundedCornerShape(8.dp)
+                width = if (isFocused) 2.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(21.dp)
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(start = 12.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start
     ) {
         Icon(
             icon,
-            contentDescription = null,
-            tint = accentColor,
+            contentDescription = label,
+            tint = iconColor,
             modifier = Modifier.size(18.dp)
         )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            label.uppercase(),
-            color = if (isFocused) accentColor else Color.White.copy(0.8f),
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
-        )
+
+        if (showText) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label.uppercase(),
+                color = accentColor,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.graphicsLayer {
+                    alpha = textAlpha
+                    translationX = textOffset.toPx()
+                }
+            )
+        }
     }
 }
 
@@ -1011,8 +1147,7 @@ private fun TrailerRow(
 
 @Composable
 private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
-    val roundCorners = LocalRoundCorners.current
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
+    val cardShape = RoundedCornerShape(10.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")

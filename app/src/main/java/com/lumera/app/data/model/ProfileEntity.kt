@@ -65,6 +65,9 @@ data class ProfileEntity(
     val subtitleBackgroundColor: Long = 0x00000000L, // Transparent
     val assRendererEnabled: Boolean = false,          // Styled ASS/SSA subtitles via libass
 
+    // Watch thresholds
+    val watchedThreshold: Int = 85,                  // 50-99%, marks as watched when exceeded
+
     // TMDB integration
     val tmdbEnabled: Boolean = false,
     val tmdbLanguage: String = ""                    // ISO-639-1, empty = device locale

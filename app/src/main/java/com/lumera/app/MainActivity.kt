@@ -60,6 +60,7 @@ import com.lumera.app.ui.components.LumeraBackground
 import com.lumera.app.ui.details.DetailsScreen
 import com.lumera.app.ui.home.GridViewScreen
 import com.lumera.app.ui.home.HomeScreen
+import com.lumera.app.ui.watchlist.WatchlistScreen
 import com.lumera.app.ui.home.HomeViewModel
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.data.model.stremio.Stream
@@ -972,6 +973,7 @@ class MainActivity : ComponentActivity() {
                         val homeEntryRequester = remember { FocusRequester() }
                         val searchEntryRequester = remember { FocusRequester() }
                         val settingsEntryRequester = remember { FocusRequester() }
+                        val watchlistEntryRequester = remember { FocusRequester() }
 
                         // STATE CHANGE TRIGGER:
                         LaunchedEffect(currentNav, activeView) {
@@ -999,6 +1001,10 @@ class MainActivity : ComponentActivity() {
                                 NavDestination.Settings -> {
                                     delay(200) // Increased for stability
                                     settingsEntryRequester.requestFocus()
+                                }
+                                NavDestination.Watchlist -> {
+                                    delay(200)
+                                    watchlistEntryRequester.requestFocus()
                                 }
                                 else -> Unit
                             }
@@ -1032,6 +1038,7 @@ class MainActivity : ComponentActivity() {
                                             NavDestination.Home, NavDestination.Movies, NavDestination.Series -> homeEntryRequester.requestFocus()
                                             NavDestination.Search -> searchEntryRequester.requestFocus()
                                             NavDestination.Settings -> settingsEntryRequester.requestFocus()
+                                            NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
                                             else -> {}
                                         }
                                     } else {
@@ -1047,6 +1054,7 @@ class MainActivity : ComponentActivity() {
                                         NavDestination.Home, NavDestination.Movies, NavDestination.Series -> homeEntryRequester.requestFocus()
                                         NavDestination.Search -> searchEntryRequester.requestFocus()
                                         NavDestination.Settings -> settingsEntryRequester.requestFocus()
+                                        NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
                                         else -> {}
                                     }
                                 }
@@ -1184,6 +1192,28 @@ class MainActivity : ComponentActivity() {
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
                                                 }
+                                                NavDestination.Watchlist -> {
+                                                    WatchlistScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = watchlistEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.Watchlist]!!,
+                                                        onMovieClick = { movie ->
+                                                            selectedMovieId = movie.id
+                                                            selectedMovieType = movie.type
+                                                            selectedMovieTitle = movie.name
+                                                            selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
+                                                            detailsResumePlaybackHint = null
+                                                            selectedPlaybackId = movie.id
+                                                            selectedPlaybackType = movie.type
+                                                            selectedPlaybackTitle = movie.name
+                                                            selectedPlaybackPoster = movie.poster ?: ""
+                                                            previousView = "menu"
+                                                            activeView = "details"
+                                                        }
+                                                    )
+                                                }
                                                 NavDestination.Settings -> {
                                                     val homeVm = hiltViewModel<HomeViewModel>()
                                                     SettingsScreen(
@@ -1306,6 +1336,28 @@ class MainActivity : ComponentActivity() {
                                                     activeView = "menu"
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
+                                                }
+                                                NavDestination.Watchlist -> {
+                                                    WatchlistScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = watchlistEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.Watchlist]!!,
+                                                        onMovieClick = { movie ->
+                                                            selectedMovieId = movie.id
+                                                            selectedMovieType = movie.type
+                                                            selectedMovieTitle = movie.name
+                                                            selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieLogo = movie.logo ?: ""
+                                                            selectedAddonBaseUrl = movie.addonBaseUrl
+                                                            detailsResumePlaybackHint = null
+                                                            selectedPlaybackId = movie.id
+                                                            selectedPlaybackType = movie.type
+                                                            selectedPlaybackTitle = movie.name
+                                                            selectedPlaybackPoster = movie.poster ?: ""
+                                                            previousView = "menu"
+                                                            activeView = "details"
+                                                        }
+                                                    )
                                                 }
                                                 NavDestination.Settings -> {
                                                     val homeVm = hiltViewModel<HomeViewModel>()

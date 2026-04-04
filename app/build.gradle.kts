@@ -19,6 +19,8 @@ val localProperties = Properties().apply {
 val acraUrl: String = localProperties.getProperty("acra.url", "")
 val acraToken: String = localProperties.getProperty("acra.token", "")
 val tmdbApiKey: String = localProperties.getProperty("tmdb.api_key", "")
+val traktClientId: String = localProperties.getProperty("TRAKT_CLIENT_ID", "")
+val traktClientSecret: String = localProperties.getProperty("TRAKT_CLIENT_SECRET", "")
 
 android {
     namespace = "com.lumera.app"
@@ -41,6 +43,10 @@ android {
 
         // TMDB API (loaded from local.properties)
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+
+        // Trakt API (loaded from local.properties)
+        buildConfigField("String", "TRAKT_CLIENT_ID", "\"$traktClientId\"")
+        buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"$traktClientSecret\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

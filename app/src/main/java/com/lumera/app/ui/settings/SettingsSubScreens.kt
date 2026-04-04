@@ -416,6 +416,21 @@ fun PlaybackSettings(
                 }
             }
 
+            // WATCHED THRESHOLD
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Mark as watched at ${currentProfile.watchedThreshold}%",
+                color = Color.White.copy(0.6f),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+            VoidSlider(
+                value = currentProfile.watchedThreshold.toFloat(),
+                onValueChange = { viewModel.updateWatchedThreshold(currentProfile.id, it.toInt()) },
+                valueRange = 50f..99f,
+                steps = 48
+            )
+
             // LANGUAGE PREFERENCES SECTION
             Spacer(Modifier.height(12.dp))
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))

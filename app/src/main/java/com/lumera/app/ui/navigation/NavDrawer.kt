@@ -54,6 +54,7 @@ enum class NavDestination(
     Home(R.drawable.home_icon, "Home", iconSize = 21.dp),
     Movies(R.drawable.movies_icon, "Movies"),
     Series(R.drawable.series_icon, "Series"),
+    Watchlist(R.drawable.watchlist_icon, "Watchlist"),
     Search(R.drawable.search_icon, "Search"),
     Profile(R.drawable.profile_icon, "Profile", iconSize = 18.dp),
     Settings(R.drawable.settings_icon, "Settings"),
@@ -249,6 +250,8 @@ fun NavDrawer(
                 DrawerItem(NavDestination.Movies)
                 Spacer(modifier = Modifier.height(4.dp))
                 DrawerItem(NavDestination.Series)
+                Spacer(modifier = Modifier.height(4.dp))
+                DrawerItem(NavDestination.Watchlist)
 
                 Spacer(modifier = Modifier.weight(1f))
 

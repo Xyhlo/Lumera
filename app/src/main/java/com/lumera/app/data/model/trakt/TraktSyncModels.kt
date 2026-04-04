@@ -1,0 +1,82 @@
+package com.lumera.app.data.model.trakt
+
+import com.google.gson.annotations.SerializedName
+
+/**
+ * A single item in the Trakt watchlist response.
+ * GET /sync/watchlist returns an array of these.
+ */
+data class TraktWatchlistItem(
+    val rank: Int?,
+    val id: Long?,
+    @SerializedName("listed_at") val listedAt: String?,
+    val type: String,         // "movie" or "show"
+    val movie: TraktMovie?,
+    val show: TraktShow?
+)
+
+data class TraktMovie(
+    val title: String?,
+    val year: Int?,
+    val ids: TraktIds
+)
+
+data class TraktShow(
+    val title: String?,
+    val year: Int?,
+    val ids: TraktIds
+)
+
+data class TraktIds(
+    val trakt: Int? = null,
+    val slug: String? = null,
+    val imdb: String? = null,
+    val tmdb: Int? = null
+)
+
+/**
+ * Request body for POST /sync/watchlist and /sync/watchlist/remove.
+ */
+data class TraktSyncRequest(
+    val movies: List<TraktSyncItem>? = null,
+    val shows: List<TraktSyncItem>? = null
+)
+
+data class TraktSyncItem(
+    val ids: TraktIds
+)
+
+/**
+ * Response from POST /sync/watchlist and /sync/watchlist/remove.
+ */
+data class TraktSyncResponse(
+    val added: TraktSyncCounts?,
+    val deleted: TraktSyncCounts?,
+    val existing: TraktSyncCounts?,
+    @SerializedName("not_found") val notFound: TraktSyncNotFound?
+)
+
+data class TraktSyncCounts(
+    val movies: Int?,
+    val shows: Int?,
+    val episodes: Int?
+)
+
+data class TraktSyncNotFound(
+    val movies: List<Any>?,
+    val shows: List<Any>?
+)
+
+/**
+ * Response from GET /sync/last_activities.
+ * We only parse the fields we care about — Trakt returns many more.
+ */
+data class TraktLastActivities(
+    val watchlist: TraktActivityTimestamp?,
+    val episodes: TraktActivityTimestamp?,
+    val movies: TraktActivityTimestamp?
+)
+
+data class TraktActivityTimestamp(
+    @SerializedName("updated_at") val updatedAt: String?
+)

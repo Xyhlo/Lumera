@@ -3,6 +3,9 @@ package com.lumera.app.di
 import com.lumera.app.data.remote.StremioApiService
 import com.lumera.app.data.remote.IntroDbService
 import com.lumera.app.data.remote.TmdbApiService
+import com.lumera.app.data.remote.TraktApiService
+import com.lumera.app.data.remote.TraktSyncApiService
+import com.lumera.app.data.trakt.TraktAuthInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,6 +20,14 @@ import javax.inject.Singleton
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class TmdbRetrofit
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class TraktRetrofit
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class TraktAuthenticatedRetrofit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -69,5 +80,45 @@ object NetworkModule {
     @Singleton
     fun provideTmdbApiService(@TmdbRetrofit retrofit: Retrofit): TmdbApiService {
         return retrofit.create(TmdbApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @TraktRetrofit
+    fun provideTraktRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://api.trakt.tv/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTraktApiService(@TraktRetrofit retrofit: Retrofit): TraktApiService {
+        return retrofit.create(TraktApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @TraktAuthenticatedRetrofit
+    fun provideTraktAuthenticatedRetrofit(
+        okHttpClient: OkHttpClient,
+        traktAuthInterceptor: TraktAuthInterceptor
+    ): Retrofit {
+        val authenticatedClient = okHttpClient.newBuilder()
+            .addInterceptor(traktAuthInterceptor)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl("https://api.trakt.tv/")
+            .client(authenticatedClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTraktSyncApiService(@TraktAuthenticatedRetrofit retrofit: Retrofit): TraktSyncApiService {
+        return retrofit.create(TraktSyncApiService::class.java)
     }
 }

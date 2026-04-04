@@ -69,7 +69,8 @@ fun TopNavigationBar(
         NavDestination.Search,
         NavDestination.Home,
         NavDestination.Movies,
-        NavDestination.Series
+        NavDestination.Series,
+        NavDestination.Watchlist
     )
 
     // Left Logic (Settings + Menu)

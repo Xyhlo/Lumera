@@ -13,7 +13,8 @@ data class TmdbFindResult(
     @SerializedName("id") val id: Int,
     @SerializedName("title") val title: String? = null,
     @SerializedName("name") val name: String? = null,
-    @SerializedName("media_type") val mediaType: String? = null
+    @SerializedName("media_type") val mediaType: String? = null,
+    @SerializedName("poster_path") val posterPath: String? = null
 )
 
 data class TmdbExternalIdsResponse(

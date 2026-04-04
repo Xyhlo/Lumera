@@ -9,6 +9,9 @@ import com.lumera.app.data.model.StremioAddonItem
 import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.remote.StremioAuthError
 import com.lumera.app.data.repository.AddonRepository
+import com.lumera.app.data.trakt.DeviceAuthState
+import com.lumera.app.data.trakt.TraktAuthManager
+import com.lumera.app.data.trakt.TraktSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -33,7 +36,9 @@ data class IntegrationsUiState(
     val isLoading: Boolean = false,
     val pendingAddons: List<StremioAddonItem>? = null,
     val tmdbEnabled: Boolean = false,
-    val tmdbLanguage: String = ""
+    val tmdbLanguage: String = "",
+    val traktConnected: Boolean = false,
+    val traktAuthState: DeviceAuthState = DeviceAuthState.Idle
 )
 
 @HiltViewModel
@@ -41,7 +46,9 @@ class IntegrationsViewModel @Inject constructor(
     private val stremioAuthManager: StremioAuthManager,
     private val addonRepository: AddonRepository,
     private val profileConfigurationManager: ProfileConfigurationManager,
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val traktAuthManager: TraktAuthManager,
+    private val traktSyncManager: TraktSyncManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IntegrationsUiState())
@@ -55,6 +62,21 @@ class IntegrationsViewModel @Inject constructor(
         viewModelScope.launch {
             stremioAuthManager.connectionState.collect { state ->
                 _uiState.value = _uiState.value.copy(connectionState = state)
+            }
+        }
+        // Observe Trakt connection state
+        viewModelScope.launch {
+            traktAuthManager.isConnected.collect { connected ->
+                _uiState.value = _uiState.value.copy(traktConnected = connected)
+            }
+        }
+        viewModelScope.launch {
+            traktAuthManager.authState.collect { authState ->
+                _uiState.value = _uiState.value.copy(traktAuthState = authState)
+                // Auto-sync watchlist after successful auth
+                if (authState is DeviceAuthState.Success) {
+                    traktSyncManager.syncWatchlist()
+                }
             }
         }
         // Load TMDB settings from active profile
@@ -222,5 +244,19 @@ class IntegrationsViewModel @Inject constructor(
         viewModelScope.launch {
             _events.send(IntegrationsEvent.Disconnected)
         }
+    }
+
+    // ── Trakt ──
+
+    fun startTraktAuth() {
+        viewModelScope.launch { traktAuthManager.startDeviceAuth() }
+    }
+
+    fun disconnectTrakt() {
+        viewModelScope.launch { traktAuthManager.disconnect() }
+    }
+
+    fun resetTraktAuthState() {
+        traktAuthManager.resetAuthState()
     }
 }

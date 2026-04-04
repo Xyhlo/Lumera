@@ -116,22 +116,34 @@ fun GlassSidebar(
     val episodesListState = rememberLazyListState()
     var savedSeason by remember { mutableStateOf<Int?>(null) }
     var savedIndex by remember { mutableIntStateOf(0) }
+    var previousState by remember { mutableStateOf<SidebarState>(SidebarState.Closed) }
 
-    // When sidebar opens with episodes, auto-navigate to the currently playing episode
+    // When sidebar opens with episodes, auto-navigate to the currently playing episode,
+    // reset to the beginning if freshly opened from details (Closed→Episodes),
+    // or preserve position when returning from sources (Sources→Episodes).
     LaunchedEffect(state, currentEpisodeId) {
-        if (state is SidebarState.Episodes && currentEpisodeId != null) {
-            val seasonMap = state.videos.filter { it.season > 0 }.groupBy { it.season }
-            for ((season, eps) in seasonMap) {
-                val idx = eps.indexOfFirst { ep ->
-                    ep.id == currentEpisodeId || currentEpisodeId.endsWith(":${ep.season}:${ep.episode}")
+        if (state is SidebarState.Episodes) {
+            if (currentEpisodeId != null) {
+                val seasonMap = state.videos.filter { it.season > 0 }.groupBy { it.season }
+                for ((season, eps) in seasonMap) {
+                    val idx = eps.indexOfFirst { ep ->
+                        ep.id == currentEpisodeId || currentEpisodeId.endsWith(":${ep.season}:${ep.episode}")
+                    }
+                    if (idx >= 0) {
+                        savedSeason = season
+                        savedIndex = idx
+                        break
+                    }
                 }
-                if (idx >= 0) {
-                    savedSeason = season
-                    savedIndex = idx
-                    break
-                }
+            } else if (previousState is SidebarState.Closed) {
+                // Fresh open from details screen — reset to first episode
+                savedSeason = null
+                savedIndex = 0
+                runCatching { episodesListState.scrollToItem(0) }
             }
+            // Sources→Episodes: keep savedSeason/savedIndex from the episode click
         }
+        previousState = state
     }
 
     LaunchedEffect(state) {
@@ -193,9 +205,9 @@ fun EpisodesContent(
 
     LaunchedEffect(selectedSeason) { onSeasonChange(selectedSeason) }
 
-    // Scroll to the current episode when the sidebar opens
+    // Scroll to the saved episode when the sidebar opens (or back to top when savedIndex is 0)
     LaunchedEffect(savedIndex, selectedSeason) {
-        if (episodes.isNotEmpty() && savedIndex > 0 && savedIndex in episodes.indices) {
+        if (episodes.isNotEmpty() && savedIndex in episodes.indices) {
             runCatching { listState.scrollToItem(savedIndex) }
         }
     }

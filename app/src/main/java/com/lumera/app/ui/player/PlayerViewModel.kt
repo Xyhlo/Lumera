@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
 
     fun saveProgress(
@@ -35,12 +37,11 @@ class PlayerViewModel @Inject constructor(
 
             val remaining = safeDuration - safePosition
             val completionRatio = if (safeDuration > 0L) safePosition.toDouble() / safeDuration.toDouble() else 0.0
-            val isCompleted = completionRatio >= 0.98 || remaining <= 30_000L
 
-            if (isCompleted) {
-                dao.deleteHistoryItem(id)
-                return@launch
-            }
+            // Read configurable threshold from active profile (default 85%)
+            val profileId = profileConfigurationManager.getLastActiveProfileId()
+            val threshold = profileId?.let { dao.getProfileById(it) }?.watchedThreshold ?: 85
+            val isCompleted = completionRatio >= (threshold / 100.0) || remaining <= 30_000L
 
             val entry = WatchHistoryEntity(
                 id = id,
@@ -49,7 +50,8 @@ class PlayerViewModel @Inject constructor(
                 position = safePosition,
                 duration = safeDuration,
                 lastWatched = System.currentTimeMillis(),
-                type = type.ifBlank { "movie" }
+                type = type.ifBlank { "movie" },
+                watched = isCompleted
             )
             dao.upsertHistory(entry)
         }
@@ -57,7 +59,10 @@ class PlayerViewModel @Inject constructor(
 
     fun markCompleted(id: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            dao.deleteHistoryItem(id)
+            val existing = dao.getHistoryItem(id)
+            if (existing != null) {
+                dao.upsertHistory(existing.copy(watched = true, lastWatched = System.currentTimeMillis()))
+            }
         }
     }
 

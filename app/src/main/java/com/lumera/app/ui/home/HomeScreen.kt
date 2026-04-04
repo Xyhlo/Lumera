@@ -738,10 +738,14 @@ private fun resolveCinematicPreviewItem(
 private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<MetaItem> {
     if (history.isEmpty()) return emptyList()
 
+    // Only show in-progress items, not fully watched ones
+    val inProgress = history.filter { !it.watched }
+    if (inProgress.isEmpty()) return emptyList()
+
     val seriesByCanonicalId = mutableMapOf<String, MutableList<WatchHistoryEntity>>()
     val movieById = mutableMapOf<String, WatchHistoryEntity>()
 
-    history.forEach { entry ->
+    inProgress.forEach { entry ->
         if (entry.type == "series") {
             val canonicalId = canonicalSeriesId(entry.id)
             seriesByCanonicalId.getOrPut(canonicalId) { mutableListOf() }.add(entry)
@@ -758,7 +762,7 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
         }
     }
 
-    return history.mapNotNull { entry ->
+    return inProgress.mapNotNull { entry ->
         if (entry.type == "series") {
             val canonicalId = canonicalSeriesId(entry.id)
             val chosen = chosenSeries[canonicalId] ?: return@mapNotNull null

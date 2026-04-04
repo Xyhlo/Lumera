@@ -13,7 +13,8 @@ data class WatchHistoryEntity(
     val position: Long,
     val duration: Long,
     val lastWatched: Long,
-    val type: String
+    val type: String,
+    val watched: Boolean = false   // true = fully watched (past threshold), false = in progress
 ) {
     fun progress(): Float {
         if (duration == 0L) return 0f

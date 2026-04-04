@@ -14,6 +14,7 @@ import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.model.WatchlistEntity
 import kotlinx.coroutines.flow.Flow
 import androidx.room.Delete
 
@@ -199,6 +200,32 @@ interface AddonDao {
 
     @Update
     suspend fun updateHubRowItems(items: List<HubRowItemEntity>)
+
+    // ── Watchlist ──
+
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    fun getWatchlist(): Flow<List<WatchlistEntity>>
+
+    @Query("SELECT * FROM watchlist WHERE type = :type ORDER BY addedAt DESC")
+    fun getWatchlistByType(type: String): Flow<List<WatchlistEntity>>
+
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    suspend fun getWatchlistOnce(): List<WatchlistEntity>
+
+    @Query("SELECT * FROM watchlist WHERE id = :id")
+    suspend fun getWatchlistItem(id: String): WatchlistEntity?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
+    suspend fun isInWatchlist(id: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
+    fun isInWatchlistFlow(id: String): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addToWatchlist(item: WatchlistEntity)
+
+    @Query("DELETE FROM watchlist WHERE id = :id")
+    suspend fun removeFromWatchlist(id: String)
 
     @Transaction
     suspend fun replaceRuntimeState(

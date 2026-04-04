@@ -9,6 +9,7 @@ import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.model.WatchlistEntity
 
 
 @Database(
@@ -19,9 +20,10 @@ import com.lumera.app.data.model.WatchHistoryEntity
         CatalogConfigEntity::class,
         ThemeEntity::class,
         HubRowEntity::class,
-        HubRowItemEntity::class
+        HubRowItemEntity::class,
+        WatchlistEntity::class
     ],
-    version = 37
+    version = 39
 )
 abstract class LumeraDatabase : RoomDatabase() {
     abstract fun addonDao(): AddonDao

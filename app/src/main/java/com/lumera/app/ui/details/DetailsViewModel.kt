@@ -19,9 +19,15 @@ import com.lumera.app.data.tmdb.TmdbMetadataService
 import com.lumera.app.data.tmdb.TmdbService
 import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
+import com.lumera.app.data.trakt.TraktSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.model.WatchlistEntity
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +35,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -42,7 +50,8 @@ class DetailsViewModel @Inject constructor(
     private val profileConfigurationManager: ProfileConfigurationManager,
     private val streamSortingService: StreamSortingService,
     private val tmdbService: TmdbService,
-    private val tmdbMetadataService: TmdbMetadataService
+    private val tmdbMetadataService: TmdbMetadataService,
+    private val traktSyncManager: TraktSyncManager
 ) : ViewModel() {
 
     data class DetailsState(
@@ -69,6 +78,14 @@ class DetailsViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(DetailsState())
     val state: StateFlow<DetailsState> = _state
+
+    /** Reactive watchlist status — emits true/false as the current item's watchlist state changes. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val isInWatchlist: StateFlow<Boolean> = _state
+        .map { it.resolvedId ?: it.meta?.id }
+        .flatMapLatest { id -> if (id != null) dao.isInWatchlistFlow(id) else flowOf(false) }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), false)
+
     private var loadDetailsJob: Job? = null
     private var loadStreamsJob: Job? = null
     private var tmdbEnrichmentJob: Job? = null
@@ -450,6 +467,29 @@ class DetailsViewModel @Inject constructor(
         clearedResumeId = null
         if (_state.value.progressCleared) {
             _state.value = _state.value.copy(progressCleared = false)
+        }
+    }
+
+    // --- Watchlist toggle ---
+
+    fun toggleWatchlist() {
+        val meta = _state.value.meta ?: return
+        val itemId = _state.value.resolvedId ?: meta.id
+        viewModelScope.launch(Dispatchers.IO) {
+            if (dao.isInWatchlist(itemId)) {
+                dao.removeFromWatchlist(itemId)
+                traktSyncManager.pushRemove(itemId, meta.type)
+            } else {
+                val entity = WatchlistEntity(
+                    id = itemId,
+                    type = meta.type,
+                    title = meta.name,
+                    poster = meta.poster,
+                    addedAt = System.currentTimeMillis()
+                )
+                dao.addToWatchlist(entity)
+                traktSyncManager.pushAdd(entity)
+            }
         }
     }
 
