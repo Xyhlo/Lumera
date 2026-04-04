@@ -1,5 +1,6 @@
 package com.lumera.app.ui.player.base
 
+import android.app.Activity
 import android.content.Context
 
 object PlayerBackendFactory {
@@ -10,7 +11,8 @@ object PlayerBackendFactory {
     ): PlayerRuntime {
         return when (backendType) {
             PlayerBackendType.EXOPLAYER -> {
-                val backend = ExoPlayerBackend(context.applicationContext, playbackSettings)
+                val activity = context as? Activity
+                val backend = ExoPlayerBackend(context.applicationContext, playbackSettings, activity)
                 PlayerRuntime(
                     playbackController = backend,
                     renderSurface = backend

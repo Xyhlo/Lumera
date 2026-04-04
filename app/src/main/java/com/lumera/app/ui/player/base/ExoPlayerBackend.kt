@@ -1,5 +1,6 @@
 package com.lumera.app.ui.player.base
 
+import android.app.Activity
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
@@ -87,8 +88,12 @@ private const val MAX_AUDIO_AUTO_RETRIES_PER_SOURCE = 3
 
 class ExoPlayerBackend(
     private val appContext: Context,
-    private val playbackSettings: PlaybackSettings = PlaybackSettings()
+    private val playbackSettings: PlaybackSettings = PlaybackSettings(),
+    activity: Activity? = null
 ) : PlayerPlaybackController, PlayerRenderSurface {
+
+    private val frameRateManager: FrameRateManager? =
+        if (playbackSettings.frameRateMatching && activity != null) FrameRateManager(activity) else null
 
     /**
      * Called when the user selects a magnet source in the player.
@@ -312,11 +317,26 @@ class ExoPlayerBackend(
         }
     }
 
+    private var appliedVideoFrameRate: Float = 0f
+
     private val analyticsListener = object : AnalyticsListener {
         override fun onDownstreamFormatChanged(
             eventTime: AnalyticsListener.EventTime,
             mediaLoadData: MediaLoadData
         ) {
+            // Frame rate matching: detect video track format changes
+            if (mediaLoadData.trackType == C.TRACK_TYPE_VIDEO && frameRateManager != null) {
+                val rawRate = mediaLoadData.trackFormat?.frameRate ?: Format.NO_VALUE.toFloat()
+                if (rawRate > 0f) {
+                    val snapped = frameRateManager.snapToStandardRate(rawRate)
+                    if (snapped != appliedVideoFrameRate) {
+                        appliedVideoFrameRate = snapped
+                        scope.launch(Dispatchers.Main) {
+                            frameRateManager.matchDisplayToFrameRate(snapped)
+                        }
+                    }
+                }
+            }
             if (mediaLoadData.trackType != C.TRACK_TYPE_TEXT) return
             val trackFormat = mediaLoadData.trackFormat ?: return
             val formatTag = inferSubtitleFormatTag(format = trackFormat, externalUrl = null) ?: return
@@ -804,6 +824,7 @@ class ExoPlayerBackend(
 
     override fun release() {
         released = true
+        frameRateManager?.restoreOriginalMode()
         assHandler?.release()
         assHandler = null
 
@@ -1020,6 +1041,9 @@ class ExoPlayerBackend(
             .build()
         player.setAudioAttributes(audioAttributes, true)
         player.setHandleAudioBecomingNoisy(true)
+        if (frameRateManager != null) {
+            player.videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
+        }
         assHandler?.player = player
         player.addListener(playerListener)
         player.addAnalyticsListener(analyticsListener)
