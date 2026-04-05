@@ -155,7 +155,9 @@ class TraktSyncManager @Inject constructor(
                 // 5. Remove local items no longer on Trakt (deleted externally).
                 // Local adds are pushed instantly via pushAdd(), so anything
                 // local but missing from Trakt was removed on Trakt's side.
-                val toRemove = localItems.filter { it.id !in traktImdbIds }
+                // Only consider items with IMDb-format IDs — items without them
+                // can't be matched against Trakt's response. (Fix: audit #7)
+                val toRemove = localItems.filter { it.id.startsWith("tt") && it.id !in traktImdbIds }
                 for (item in toRemove) {
                     dao.removeFromWatchlist(item.id)
                     Log.d(TAG, "Removed ${item.title} (deleted on Trakt)")
