@@ -1,6 +1,7 @@
 package com.lumera.app.data.trakt
 
 import android.util.Log
+import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.trakt.TraktIds
 import com.lumera.app.data.model.trakt.TraktScrobbleEpisode
 import com.lumera.app.data.model.trakt.TraktScrobbleMovie
@@ -27,7 +28,8 @@ import javax.inject.Singleton
 @Singleton
 class TraktScrobbleManager @Inject constructor(
     private val traktSyncApi: TraktSyncApiService,
-    private val traktAuthManager: TraktAuthManager
+    private val traktAuthManager: TraktAuthManager,
+    private val dao: AddonDao
 ) {
     companion object {
         private const val TAG = "TraktScrobble"
@@ -51,9 +53,12 @@ class TraktScrobbleManager @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobbleStart(request)
-                val body = response.body()?.string()
-                Log.d(TAG, "start: ${response.code()} progress=${"%.1f".format(progress)}% body=$body")
-                if (!response.isSuccessful) Log.w(TAG, "start error: ${response.errorBody()?.string()}")
+                Log.d(TAG, "start: ${response.code()} progress=${"%.1f".format(progress)}%")
+                if (response.isSuccessful) {
+                    markAsScrobbled(playbackId)
+                } else {
+                    Log.w(TAG, "start error: ${response.errorBody()?.string()}")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "start failed: ${e.message}")
             }
@@ -74,8 +79,7 @@ class TraktScrobbleManager @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobblePause(request)
-                val body = response.body()?.string()
-                Log.d(TAG, "pause: ${response.code()} progress=${"%.1f".format(progress)}% body=$body")
+                Log.d(TAG, "pause: ${response.code()} progress=${"%.1f".format(progress)}%")
                 if (!response.isSuccessful) Log.w(TAG, "pause error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
                 Log.w(TAG, "pause failed: ${e.message}")
@@ -105,6 +109,14 @@ class TraktScrobbleManager @Inject constructor(
     }
 
     // ── Internal ──
+
+    /** Mark the watch history item as scrobbled so sync knows Trakt is aware of it. */
+    private suspend fun markAsScrobbled(playbackId: String) {
+        val item = dao.getHistoryItem(playbackId) ?: return
+        if (!item.scrobbled) {
+            dao.upsertHistory(item.copy(scrobbled = true))
+        }
+    }
 
     private fun shouldScrobble(): Boolean = traktAuthManager.getAccessToken() != null
 

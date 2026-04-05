@@ -461,12 +461,23 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    /** Drop the undo stash so progress deletion becomes permanent. */
+    /** Drop the undo stash so progress deletion becomes permanent. (Fix 4: Trakt deletion deferred to here) */
     fun commitClearProgress() {
+        val stash = clearedHistoryStash
         clearedHistoryStash = emptyList()
         clearedResumeId = null
         if (_state.value.progressCleared) {
             _state.value = _state.value.copy(progressCleared = false)
+        }
+        // Now that the user can no longer undo, delete from Trakt
+        if (stash.any { it.scrobbled }) {
+            viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+                for (item in stash) {
+                    if (item.scrobbled) {
+                        traktSyncManager.deletePlaybackFromTrakt(item.id)
+                    }
+                }
+            }
         }
     }
 

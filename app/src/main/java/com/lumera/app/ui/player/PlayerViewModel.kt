@@ -55,7 +55,8 @@ class PlayerViewModel @Inject constructor(
                 duration = safeDuration,
                 lastWatched = System.currentTimeMillis(),
                 type = type.ifBlank { "movie" },
-                watched = isCompleted
+                watched = isCompleted,
+                scrobbled = existing?.scrobbled ?: false
             )
             dao.upsertHistory(entry)
         }

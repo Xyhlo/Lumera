@@ -65,7 +65,8 @@ data class PlaybackSettings(
     val subtitleOffset: Int = 0,
     val subtitleTextColor: Int = 0xFFFFFFFF.toInt(),
     val subtitleBackgroundColor: Int = 0x00000000,
-    val assRendererEnabled: Boolean = false
+    val assRendererEnabled: Boolean = false,
+    val watchedThreshold: Int = 85
 )
 
 @Immutable

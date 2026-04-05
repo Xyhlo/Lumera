@@ -5,11 +5,15 @@ import com.lumera.app.data.model.trakt.TraktPlaybackItem
 import com.lumera.app.data.model.trakt.TraktScrobbleRequest
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktSyncResponse
+import com.lumera.app.data.model.trakt.TraktWatchedMovie
+import com.lumera.app.data.model.trakt.TraktWatchedShow
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TraktSyncApiService {
@@ -41,6 +45,19 @@ interface TraktSyncApiService {
 
     @GET("sync/playback")
     suspend fun getPlaybackProgress(): Response<List<TraktPlaybackItem>>
+
+    @DELETE("sync/playback/{id}")
+    suspend fun deletePlaybackItem(
+        @Path("id") playbackId: Long
+    ): Response<Unit>
+
+    // ── Watched History ──
+
+    @GET("sync/watched/movies")
+    suspend fun getWatchedMovies(): Response<List<TraktWatchedMovie>>
+
+    @GET("sync/watched/shows")
+    suspend fun getWatchedShows(): Response<List<TraktWatchedShow>>
 
     // ── Scrobble ──
 

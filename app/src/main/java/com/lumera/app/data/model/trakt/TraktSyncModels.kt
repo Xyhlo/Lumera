@@ -108,6 +108,33 @@ data class TraktPlaybackEpisode(
 )
 
 /**
+ * Response from GET /sync/watched/movies
+ */
+data class TraktWatchedMovie(
+    val movie: TraktMovie,
+    @SerializedName("last_watched_at") val lastWatchedAt: String?
+)
+
+/**
+ * Response from GET /sync/watched/shows
+ */
+data class TraktWatchedShow(
+    val show: TraktShow,
+    @SerializedName("last_watched_at") val lastWatchedAt: String?,
+    val seasons: List<TraktWatchedSeason>?
+)
+
+data class TraktWatchedSeason(
+    val number: Int,
+    val episodes: List<TraktWatchedEpisode>?
+)
+
+data class TraktWatchedEpisode(
+    val number: Int,
+    @SerializedName("last_watched_at") val lastWatchedAt: String?
+)
+
+/**
  * Request body for POST /scrobble/start, /scrobble/pause, /scrobble/stop.
  */
 data class TraktScrobbleRequest(

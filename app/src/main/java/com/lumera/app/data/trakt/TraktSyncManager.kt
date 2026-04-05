@@ -33,6 +33,9 @@ class TraktSyncManager @Inject constructor(
     private var lastWatchlistActivity: String? = null
     private var lastPlaybackActivity: String? = null
 
+    // IDs currently being deleted from Trakt — sync skips these to prevent race conditions (Fix 5)
+    private val pendingDeletes = mutableSetOf<String>()
+
     /**
      * Lightweight check: queries /sync/last_activities and only runs
      * syncs for categories whose timestamps have changed.
@@ -197,80 +200,139 @@ class TraktSyncManager @Inject constructor(
     }
 
     /**
-     * Sync playback progress from Trakt (continue watching from other apps).
-     * Pulls in-progress items and creates/updates local watch history entries.
-     * Only adds items that don't already exist locally — won't overwrite
-     * local progress with potentially stale Trakt data.
+     * Full playback progress sync with diff logic.
+     *
+     * For each LOCAL in-progress item where scrobbled == true:
+     *   - On Trakt playback?        → keep local (more accurate position)
+     *   - Not on playback, on watched? → mark as watched locally (finished on other app)
+     *   - Not on either?            → user cleared it on Trakt → delete locally
+     *
+     * For each LOCAL in-progress item where scrobbled == false:
+     *   → Never touched Trakt. Leave it alone.
+     *
+     * For each item on Trakt playback NOT in local:
+     *   → Pull to Lumera (watched on other app)
      */
     suspend fun syncPlaybackProgress() {
         withContext(Dispatchers.IO) {
             try {
-                val response = traktSyncApi.getPlaybackProgress()
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Playback progress fetch failed: ${response.code()}")
+                // 1. Fetch Trakt playback progress
+                val playbackResponse = traktSyncApi.getPlaybackProgress()
+                if (!playbackResponse.isSuccessful) {
+                    Log.w(TAG, "Playback progress fetch failed: ${playbackResponse.code()}")
                     return@withContext
                 }
+                val traktPlayback = playbackResponse.body() ?: emptyList()
 
-                val items = response.body() ?: return@withContext
-                Log.d(TAG, "Playback progress: ${items.size} items from Trakt")
-                items.forEach { Log.d(TAG, "  - type=${it.type}, progress=${it.progress}%, show=${it.show?.title}, ep=S${it.episode?.season}E${it.episode?.number}, movie=${it.movie?.title}") }
-                var added = 0
-
-                for (item in items) {
-                    val (id, title, type) = when (item.type) {
-                        "movie" -> {
-                            val imdb = item.movie?.ids?.imdb ?: continue
-                            Triple(imdb, item.movie?.title ?: "Unknown", "movie")
-                        }
+                // 2. Build lookup: IMDb ID → TraktPlaybackItem
+                val traktPlaybackIds = mutableMapOf<String, TraktPlaybackItem>()
+                for (item in traktPlayback) {
+                    val id = when (item.type) {
+                        "movie" -> item.movie?.ids?.imdb
                         "episode" -> {
                             val showImdb = item.show?.ids?.imdb ?: continue
                             val ep = item.episode ?: continue
-                            val playbackId = "$showImdb:${ep.season}:${ep.number}"
-                            val epTitle = item.episode.title
-                                ?: "S${ep.season}:E${ep.number} - ${item.show?.title ?: "Unknown"}"
-                            Triple(playbackId, epTitle, "series")
+                            "$showImdb:${ep.season}:${ep.number}"
                         }
-                        else -> continue
+                        else -> null
+                    }
+                    if (id != null) traktPlaybackIds[id] = item
+                }
+
+                // 3. Fetch Trakt watched history with episode-level detail (Fix 2)
+                val watchedData = fetchWatchedData()
+
+                // 4. Process local scrobbled in-progress items
+                val scrobbledItems = dao.getScrobbledInProgressItems()
+                var removed = 0
+                var markedWatched = 0
+
+                for (local in scrobbledItems) {
+                    // Fix 5: skip items currently being deleted to prevent race
+                    if (local.id in pendingDeletes) continue
+
+                    // Fix 1: strip stream index suffix for lookup
+                    // Local: "tt123:1:3:0" or "tt123:1:3", Trakt: "tt123:1:3"
+                    val normalizedId = normalizePlaybackId(local.id)
+
+                    val onTraktPlayback = normalizedId in traktPlaybackIds
+
+                    if (onTraktPlayback) {
+                        // Still in progress on Trakt — keep local version (more accurate)
+                        continue
                     }
 
-                    // Don't overwrite existing local progress — user may have
-                    // more recent local state from playing on this device
+                    // Not on Trakt playback. Check if the specific item was watched (Fix 2)
+                    val onTraktWatched = if (local.type == "series") {
+                        // Check specific episode, not just the show
+                        val parts = normalizedId.split(":")
+                        if (parts.size >= 3) {
+                            val showImdb = parts.dropLast(2).joinToString(":")
+                            val season = parts[parts.size - 2].toIntOrNull()
+                            val episode = parts[parts.size - 1].toIntOrNull()
+                            season != null && episode != null && watchedData.isEpisodeWatched(showImdb, season, episode)
+                        } else false
+                    } else {
+                        watchedData.isMovieWatched(local.id)
+                    }
+
+                    if (onTraktWatched) {
+                        // Finished on another app → mark as watched locally
+                        dao.upsertHistory(local.copy(watched = true))
+                        markedWatched++
+                        Log.d(TAG, "Marked watched (finished elsewhere): ${local.title}")
+                    } else {
+                        // Not on playback, not on watched → user cleared it on Trakt
+                        dao.deleteHistoryItem(local.id)
+                        removed++
+                        Log.d(TAG, "Removed (cleared on Trakt): ${local.title}")
+                    }
+                }
+
+                // 5. Pull new items from Trakt playback that aren't local
+                var added = 0
+                for ((id, item) in traktPlaybackIds) {
+                    // Fix 5: skip items being deleted
+                    if (id in pendingDeletes) continue
+
+                    val type = if (item.type == "movie") "movie" else "series"
+
+                    // Don't overwrite existing local progress (check both exact and with stream index)
                     val existing = dao.getHistoryItem(id)
                     if (existing != null) continue
-
-                    // For episodes, also check with stream index suffix variants
                     if (type == "series") {
                         val hasLocal = dao.getLatestSeriesEpisodeHistory("$id:%") != null
                         if (hasLocal) continue
                     }
 
-                    // Estimate position from Trakt's progress percentage.
-                    // We use a placeholder duration — the real duration will be
-                    // resolved when the user actually plays the item.
-                    val estimatedDurationMs = 90 * 60 * 1000L  // 90 min placeholder
-                    val estimatedPositionMs = ((item.progress / 100f) * estimatedDurationMs).toLong()
-
-                    val poster = when (item.type) {
-                        "movie" -> null  // Resolved lazily like watchlist items
-                        else -> null
+                    val title = when (item.type) {
+                        "movie" -> item.movie?.title ?: "Unknown"
+                        else -> {
+                            val ep = item.episode
+                            ep?.title ?: "S${ep?.season}:E${ep?.number} - ${item.show?.title ?: "Unknown"}"
+                        }
                     }
+
+                    val estimatedDurationMs = 90 * 60 * 1000L
+                    val estimatedPositionMs = ((item.progress / 100f) * estimatedDurationMs).toLong()
 
                     dao.upsertHistory(
                         WatchHistoryEntity(
                             id = id,
                             title = title,
-                            poster = poster,
+                            poster = null,
                             position = estimatedPositionMs,
                             duration = estimatedDurationMs,
                             lastWatched = System.currentTimeMillis(),
                             type = type,
-                            watched = false
+                            watched = false,
+                            scrobbled = true
                         )
                     )
                     added++
                 }
 
-                if (added > 0) Log.i(TAG, "Playback sync: added $added items to continue watching")
+                Log.i(TAG, "Playback sync: added=$added, removed=$removed, markedWatched=$markedWatched")
             } catch (e: Exception) {
                 Log.e(TAG, "Playback progress sync failed", e)
             }
@@ -322,6 +384,113 @@ class TraktSyncManager @Inject constructor(
             Log.d(TAG, "pushToTrakt response: ${response.code()}")
             if (!response.isSuccessful) {
                 Log.w(TAG, "Trakt watchlist push failed: ${response.code()} - ${response.errorBody()?.string()}")
+            }
+        }
+    }
+
+    /**
+     * Strip stream index suffix from playback ID for Trakt lookup. (Fix 1)
+     * "tt123:1:3:0" → "tt123:1:3"  (has stream index)
+     * "tt123:1:3"   → "tt123:1:3"  (already normalized)
+     * "tt123"       → "tt123"      (movie, no change)
+     */
+    private fun normalizePlaybackId(id: String): String {
+        val parts = id.split(":")
+        // Episode with stream index: 4+ parts where last is numeric (stream idx)
+        // and second-to-last and third-to-last are also numeric (episode, season)
+        if (parts.size >= 4 &&
+            parts.last().toIntOrNull() != null &&
+            parts[parts.size - 2].toIntOrNull() != null &&
+            parts[parts.size - 3].toIntOrNull() != null
+        ) {
+            return parts.dropLast(1).joinToString(":")
+        }
+        return id
+    }
+
+    /**
+     * Watched data from Trakt with episode-level granularity. (Fix 2)
+     */
+    private class WatchedData(
+        val movieIds: Set<String>,
+        val episodeMap: Map<String, Set<Pair<Int, Int>>> // showImdbId → set of (season, episode)
+    ) {
+        fun isMovieWatched(imdbId: String) = imdbId in movieIds
+        fun isEpisodeWatched(showImdbId: String, season: Int, episode: Int): Boolean {
+            return episodeMap[showImdbId]?.contains(Pair(season, episode)) ?: false
+        }
+    }
+
+    /**
+     * Fetch watched history with episode-level detail.
+     */
+    private suspend fun fetchWatchedData(): WatchedData {
+        val movieIds = mutableSetOf<String>()
+        val episodeMap = mutableMapOf<String, MutableSet<Pair<Int, Int>>>()
+        try {
+            val moviesResponse = traktSyncApi.getWatchedMovies()
+            if (moviesResponse.isSuccessful) {
+                moviesResponse.body()?.forEach { it.movie.ids.imdb?.let { id -> movieIds.add(id) } }
+            }
+            val showsResponse = traktSyncApi.getWatchedShows()
+            if (showsResponse.isSuccessful) {
+                showsResponse.body()?.forEach { show ->
+                    val showImdb = show.show.ids.imdb ?: return@forEach
+                    val episodes = episodeMap.getOrPut(showImdb) { mutableSetOf() }
+                    show.seasons?.forEach { season ->
+                        season.episodes?.forEach { ep ->
+                            episodes.add(Pair(season.number, ep.number))
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch watched history: ${e.message}")
+        }
+        return WatchedData(movieIds, episodeMap)
+    }
+
+    /**
+     * Delete a playback item from Trakt by finding its Trakt playback ID.
+     * Called when user clears progress in Lumera.
+     */
+    /**
+     * Delete playback items from Trakt. Uses pendingDeletes to prevent
+     * the sync poll from re-adding them during the delete operation. (Fix 5)
+     */
+    suspend fun deletePlaybackFromTrakt(localId: String) {
+        if (traktAuthManager.getAccessToken() == null) return
+        val normalizedId = normalizePlaybackId(localId)
+        pendingDeletes.add(normalizedId)
+        pendingDeletes.add(localId)
+        withContext(Dispatchers.IO) {
+            try {
+                val response = traktSyncApi.getPlaybackProgress()
+                if (!response.isSuccessful) return@withContext
+                val items = response.body() ?: return@withContext
+
+                for (item in items) {
+                    val traktId = when (item.type) {
+                        "movie" -> item.movie?.ids?.imdb
+                        "episode" -> {
+                            val showImdb = item.show?.ids?.imdb ?: continue
+                            val ep = item.episode ?: continue
+                            "$showImdb:${ep.season}:${ep.number}"
+                        }
+                        else -> null
+                    } ?: continue
+
+                    if (traktId == normalizedId) {
+                        val playbackId = item.id ?: continue
+                        val deleteResponse = traktSyncApi.deletePlaybackItem(playbackId)
+                        Log.d(TAG, "Deleted playback $playbackId from Trakt: ${deleteResponse.code()}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to delete playback from Trakt: ${e.message}")
+            } finally {
+                pendingDeletes.remove(normalizedId)
+                pendingDeletes.remove(localId)
             }
         }
     }

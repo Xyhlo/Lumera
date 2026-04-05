@@ -215,6 +215,9 @@ interface AddonDao {
     @Query("SELECT * FROM watchlist WHERE id = :id")
     suspend fun getWatchlistItem(id: String): WatchlistEntity?
 
+    @Query("SELECT * FROM watch_history WHERE scrobbled = 1 AND watched = 0")
+    suspend fun getScrobbledInProgressItems(): List<WatchHistoryEntity>
+
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
     suspend fun isInWatchlist(id: String): Boolean
 

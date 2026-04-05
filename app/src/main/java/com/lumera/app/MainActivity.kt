@@ -1722,7 +1722,8 @@ class MainActivity : ComponentActivity() {
                                     subtitleOffset = currentProfile?.subtitleOffset ?: 0,
                                     subtitleTextColor = currentProfile?.subtitleTextColor?.toInt() ?: 0xFFFFFFFF.toInt(),
                                     subtitleBackgroundColor = currentProfile?.subtitleBackgroundColor?.toInt() ?: 0x00000000,
-                                    assRendererEnabled = currentProfile?.assRendererEnabled ?: false
+                                    assRendererEnabled = currentProfile?.assRendererEnabled ?: false,
+                                    watchedThreshold = currentProfile?.watchedThreshold ?: 85
                                 ),
                                 skipSegmentInfo = skipSegmentInfo,
                                 nextEpisodeInfo = if (nextEpisode != null) nextEpisodeInfo else null,

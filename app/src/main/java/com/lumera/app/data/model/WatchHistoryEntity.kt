@@ -16,7 +16,8 @@ data class WatchHistoryEntity(
     val duration: Long,
     val lastWatched: Long,
     val type: String,
-    val watched: Boolean = false   // true = fully watched (past threshold), false = in progress
+    val watched: Boolean = false,   // true = fully watched (past threshold), false = in progress
+    val scrobbled: Boolean = false  // true = Trakt knows about this item (scrobble was sent successfully)
 ) {
     fun progress(): Float {
         if (duration == 0L) return 0f
