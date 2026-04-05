@@ -772,6 +772,8 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
                 type = entry.type,
                 name = entry.title,
                 poster = entry.poster,
+                background = chosen.background,
+                logo = chosen.logo,
                 progress = chosen.progress()
             )
         } else {
@@ -782,6 +784,8 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
                 type = entry.type,
                 name = entry.title,
                 poster = entry.poster,
+                background = entry.background,
+                logo = entry.logo,
                 progress = entry.progress()
             )
         }

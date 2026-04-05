@@ -2,8 +2,10 @@ package com.lumera.app.data.trakt
 
 import android.util.Log
 import com.lumera.app.data.local.AddonDao
+import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import com.lumera.app.data.model.trakt.TraktIds
+import com.lumera.app.data.model.trakt.TraktPlaybackItem
 import com.lumera.app.data.model.trakt.TraktSyncItem
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
@@ -27,14 +29,13 @@ class TraktSyncManager @Inject constructor(
 
     private val syncMutex = Mutex()
 
-    // Last known watchlist activity timestamp from Trakt.
-    // When this changes, we know the watchlist was modified externally.
+    // Last known activity timestamps from Trakt
     private var lastWatchlistActivity: String? = null
+    private var lastPlaybackActivity: String? = null
 
     /**
-     * Lightweight check: queries /sync/last_activities and only runs a full
-     * sync if the watchlist timestamp has changed since we last checked.
-     * Returns true if a sync was triggered.
+     * Lightweight check: queries /sync/last_activities and only runs
+     * syncs for categories whose timestamps have changed.
      */
     suspend fun checkAndSync(): Boolean {
         if (traktAuthManager.getAccessToken() == null) return false
@@ -48,16 +49,29 @@ class TraktSyncManager @Inject constructor(
                 }
 
                 val activities = response.body() ?: return@withContext false
-                val currentTimestamp = activities.watchlist?.updatedAt
+                var synced = false
 
-                if (currentTimestamp != null && currentTimestamp != lastWatchlistActivity) {
-                    Log.d(TAG, "Watchlist activity changed: $lastWatchlistActivity → $currentTimestamp")
-                    lastWatchlistActivity = currentTimestamp
+                // Check watchlist changes
+                val watchlistTimestamp = activities.watchlist?.updatedAt
+                if (watchlistTimestamp != null && watchlistTimestamp != lastWatchlistActivity) {
+                    Log.d(TAG, "Watchlist activity changed: $lastWatchlistActivity → $watchlistTimestamp")
+                    lastWatchlistActivity = watchlistTimestamp
                     syncWatchlist()
-                    true
-                } else {
-                    false
+                    synced = true
                 }
+
+                // Check playback progress changes (continue watching)
+                val moviesPaused = activities.movies?.pausedAt
+                val episodesPaused = activities.episodes?.pausedAt
+                val playbackTimestamp = listOfNotNull(moviesPaused, episodesPaused).maxOrNull()
+                if (playbackTimestamp != null && playbackTimestamp != lastPlaybackActivity) {
+                    Log.d(TAG, "Playback activity changed: $lastPlaybackActivity → $playbackTimestamp")
+                    lastPlaybackActivity = playbackTimestamp
+                    syncPlaybackProgress()
+                    synced = true
+                }
+
+                synced
             } catch (e: Exception) {
                 Log.w(TAG, "Activity check failed: ${e.message}")
                 false
@@ -182,9 +196,91 @@ class TraktSyncManager @Inject constructor(
         }
     }
 
-    /** Reset stored activity timestamp (e.g., on profile switch). */
+    /**
+     * Sync playback progress from Trakt (continue watching from other apps).
+     * Pulls in-progress items and creates/updates local watch history entries.
+     * Only adds items that don't already exist locally — won't overwrite
+     * local progress with potentially stale Trakt data.
+     */
+    suspend fun syncPlaybackProgress() {
+        withContext(Dispatchers.IO) {
+            try {
+                val response = traktSyncApi.getPlaybackProgress()
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Playback progress fetch failed: ${response.code()}")
+                    return@withContext
+                }
+
+                val items = response.body() ?: return@withContext
+                Log.d(TAG, "Playback progress: ${items.size} items from Trakt")
+                items.forEach { Log.d(TAG, "  - type=${it.type}, progress=${it.progress}%, show=${it.show?.title}, ep=S${it.episode?.season}E${it.episode?.number}, movie=${it.movie?.title}") }
+                var added = 0
+
+                for (item in items) {
+                    val (id, title, type) = when (item.type) {
+                        "movie" -> {
+                            val imdb = item.movie?.ids?.imdb ?: continue
+                            Triple(imdb, item.movie?.title ?: "Unknown", "movie")
+                        }
+                        "episode" -> {
+                            val showImdb = item.show?.ids?.imdb ?: continue
+                            val ep = item.episode ?: continue
+                            val playbackId = "$showImdb:${ep.season}:${ep.number}"
+                            val epTitle = item.episode.title
+                                ?: "S${ep.season}:E${ep.number} - ${item.show?.title ?: "Unknown"}"
+                            Triple(playbackId, epTitle, "series")
+                        }
+                        else -> continue
+                    }
+
+                    // Don't overwrite existing local progress — user may have
+                    // more recent local state from playing on this device
+                    val existing = dao.getHistoryItem(id)
+                    if (existing != null) continue
+
+                    // For episodes, also check with stream index suffix variants
+                    if (type == "series") {
+                        val hasLocal = dao.getLatestSeriesEpisodeHistory("$id:%") != null
+                        if (hasLocal) continue
+                    }
+
+                    // Estimate position from Trakt's progress percentage.
+                    // We use a placeholder duration — the real duration will be
+                    // resolved when the user actually plays the item.
+                    val estimatedDurationMs = 90 * 60 * 1000L  // 90 min placeholder
+                    val estimatedPositionMs = ((item.progress / 100f) * estimatedDurationMs).toLong()
+
+                    val poster = when (item.type) {
+                        "movie" -> null  // Resolved lazily like watchlist items
+                        else -> null
+                    }
+
+                    dao.upsertHistory(
+                        WatchHistoryEntity(
+                            id = id,
+                            title = title,
+                            poster = poster,
+                            position = estimatedPositionMs,
+                            duration = estimatedDurationMs,
+                            lastWatched = System.currentTimeMillis(),
+                            type = type,
+                            watched = false
+                        )
+                    )
+                    added++
+                }
+
+                if (added > 0) Log.i(TAG, "Playback sync: added $added items to continue watching")
+            } catch (e: Exception) {
+                Log.e(TAG, "Playback progress sync failed", e)
+            }
+        }
+    }
+
+    /** Reset stored activity timestamps (e.g., on profile switch). */
     fun resetActivityState() {
         lastWatchlistActivity = null
+        lastPlaybackActivity = null
     }
 
     // ── Internal ──

@@ -7,6 +7,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -101,6 +103,27 @@ fun PlayerScreen(
         }
     }
 
+    // Trakt scrobble: track last known state for episode switch detection
+    var lastScrobbleId by remember { mutableStateOf(movieId) }
+    var lastScrobblePositionMs by remember { mutableStateOf(0L) }
+    var lastScrobbleDurationMs by remember { mutableStateOf(0L) }
+
+    // Update last known state while playing
+    LaunchedEffect(uiState.positionMs, uiState.durationMs) {
+        if (uiState.durationMs > 0L) {
+            lastScrobblePositionMs = uiState.positionMs
+            lastScrobbleDurationMs = uiState.durationMs
+        }
+    }
+
+    // Stop previous episode when switching to a new one
+    LaunchedEffect(movieId) {
+        if (lastScrobbleId != movieId && lastScrobbleDurationMs > 0L) {
+            viewModel.scrobbleStop(lastScrobbleId, mediaType, lastScrobblePositionMs, lastScrobbleDurationMs)
+        }
+        lastScrobbleId = movieId
+    }
+
     // Trakt scrobble: start when playing, pause when paused
     LaunchedEffect(uiState.isPlaying) {
         if (uiState.durationMs <= 0L) return@LaunchedEffect
@@ -192,9 +215,13 @@ fun PlayerScreen(
             0.0
         }
 
-        // Trakt: scrobble stop on exit
+        // Trakt: pause keeps item in continue watching, stop marks as watched
         if (!hasError && duration != null && duration > 0L) {
-            viewModel.scrobbleStop(movieId, mediaType, position, duration)
+            if (completionRatio >= 0.80 || remaining <= 30_000L) {
+                viewModel.scrobbleStop(movieId, mediaType, position, duration)
+            } else {
+                viewModel.scrobblePause(movieId, mediaType, position, duration, force = true)
+            }
         }
 
         // Don't save progress when exiting due to error

@@ -48,7 +48,9 @@ class PlayerViewModel @Inject constructor(
             val entry = WatchHistoryEntity(
                 id = id,
                 title = title,
-                poster = poster,
+                poster = poster ?: existing?.poster,
+                background = existing?.background,
+                logo = existing?.logo,
                 position = safePosition,
                 duration = safeDuration,
                 lastWatched = System.currentTimeMillis(),
@@ -76,9 +78,9 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun scrobblePause(id: String, type: String, positionMs: Long, durationMs: Long) {
+    fun scrobblePause(id: String, type: String, positionMs: Long, durationMs: Long, force: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
-            traktScrobbleManager.scrobblePause(id, type, positionMs, durationMs)
+            traktScrobbleManager.scrobblePause(id, type, positionMs, durationMs, force = force)
         }
     }
 

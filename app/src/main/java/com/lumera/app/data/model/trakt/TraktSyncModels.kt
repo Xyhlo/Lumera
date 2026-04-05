@@ -73,12 +73,38 @@ data class TraktSyncNotFound(
  */
 data class TraktLastActivities(
     val watchlist: TraktActivityTimestamp?,
-    val episodes: TraktActivityTimestamp?,
-    val movies: TraktActivityTimestamp?
+    val episodes: TraktActivityTimestamps?,
+    val movies: TraktActivityTimestamps?
 )
 
 data class TraktActivityTimestamp(
     @SerializedName("updated_at") val updatedAt: String?
+)
+
+data class TraktActivityTimestamps(
+    @SerializedName("watched_at") val watchedAt: String? = null,
+    @SerializedName("paused_at") val pausedAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null
+)
+
+/**
+ * Response from GET /sync/playback — items the user is currently watching.
+ */
+data class TraktPlaybackItem(
+    val id: Long?,
+    val progress: Float,          // 0.0–100.0
+    val type: String,             // "movie" or "episode"
+    @SerializedName("paused_at") val pausedAt: String?,
+    val movie: TraktMovie?,
+    val show: TraktShow?,
+    val episode: TraktPlaybackEpisode?
+)
+
+data class TraktPlaybackEpisode(
+    val season: Int,
+    val number: Int,
+    val title: String?,
+    val ids: TraktIds? = null
 )
 
 /**

@@ -70,6 +70,7 @@ class MainViewModel @Inject constructor(
         traktSyncJob = viewModelScope.launch(Dispatchers.IO) {
             // Immediate full sync on login
             traktSyncManager.syncWatchlist()
+            traktSyncManager.syncPlaybackProgress()
 
             // Then lightweight activity check every 30 seconds —
             // only triggers a full sync when Trakt detects changes

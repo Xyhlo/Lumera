@@ -18,6 +18,7 @@ class TraktAuthInterceptor @Inject constructor(
             .header("Content-Type", "application/json")
             .header("trakt-api-version", "2")
             .header("trakt-api-key", BuildConfig.TRAKT_CLIENT_ID)
+            .header("User-Agent", "Lumera/${BuildConfig.VERSION_NAME}")
 
         val token = traktAuthManager.getAccessToken()
         if (token != null) {

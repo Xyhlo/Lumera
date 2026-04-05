@@ -1,6 +1,7 @@
 package com.lumera.app.data.remote
 
 import com.lumera.app.data.model.trakt.TraktLastActivities
+import com.lumera.app.data.model.trakt.TraktPlaybackItem
 import com.lumera.app.data.model.trakt.TraktScrobbleRequest
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktSyncResponse
@@ -36,20 +37,25 @@ interface TraktSyncApiService {
         @Body body: TraktSyncRequest
     ): Response<TraktSyncResponse>
 
+    // ── Playback Progress (Continue Watching) ──
+
+    @GET("sync/playback")
+    suspend fun getPlaybackProgress(): Response<List<TraktPlaybackItem>>
+
     // ── Scrobble ──
 
     @POST("scrobble/start")
     suspend fun scrobbleStart(
         @Body body: TraktScrobbleRequest
-    ): Response<Unit>
+    ): Response<okhttp3.ResponseBody>
 
     @POST("scrobble/pause")
     suspend fun scrobblePause(
         @Body body: TraktScrobbleRequest
-    ): Response<Unit>
+    ): Response<okhttp3.ResponseBody>
 
     @POST("scrobble/stop")
     suspend fun scrobbleStop(
         @Body body: TraktScrobbleRequest
-    ): Response<Unit>
+    ): Response<okhttp3.ResponseBody>
 }

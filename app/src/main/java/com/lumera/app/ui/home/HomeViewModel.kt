@@ -280,6 +280,21 @@ class HomeViewModel @Inject constructor(
                 )
                 metadataFallbackCache[key] = fallback
                 applyMetadataFallbackToState(type = item.type, id = item.id, fallback = fallback, sourceItem = item)
+
+                // Persist resolved images to watch history DB so they survive restarts
+                launch(Dispatchers.IO) {
+                    val historyItem = dao.getHistoryItem(item.id) ?: return@launch
+                    val needsPoster = historyItem.poster.isNullOrBlank() && !fallback.poster.isNullOrBlank()
+                    val needsBackground = historyItem.background.isNullOrBlank() && !fallback.background.isNullOrBlank()
+                    val needsLogo = historyItem.logo.isNullOrBlank() && !fallback.logo.isNullOrBlank()
+                    if (needsPoster || needsBackground || needsLogo) {
+                        dao.upsertHistory(historyItem.copy(
+                            poster = if (needsPoster) fallback.poster else historyItem.poster,
+                            background = if (needsBackground) fallback.background else historyItem.background,
+                            logo = if (needsLogo) fallback.logo else historyItem.logo
+                        ))
+                    }
+                }
             } catch (_: Exception) {
                 metadataFallbackCache[key] = null
             } finally {

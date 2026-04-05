@@ -41,15 +41,19 @@ class TraktScrobbleManager @Inject constructor(
      * Called when playback starts or resumes.
      */
     suspend fun scrobbleStart(playbackId: String, mediaType: String, positionMs: Long, durationMs: Long) {
+        Log.d(TAG, "scrobbleStart called: id=$playbackId, type=$mediaType, pos=$positionMs, dur=$durationMs, hasToken=${shouldScrobble()}")
         if (!shouldScrobble()) return
         val progress = calculateProgress(positionMs, durationMs)
-        val request = buildRequest(playbackId, mediaType, progress) ?: return
+        val request = buildRequest(playbackId, mediaType, progress)
+        if (request == null) { Log.w(TAG, "scrobbleStart: buildRequest returned null"); return }
 
         activePlaybackId = playbackId
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobbleStart(request)
-                Log.d(TAG, "start: ${response.code()} progress=${"%.1f".format(progress)}%")
+                val body = response.body()?.string()
+                Log.d(TAG, "start: ${response.code()} progress=${"%.1f".format(progress)}% body=$body")
+                if (!response.isSuccessful) Log.w(TAG, "start error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
                 Log.w(TAG, "start failed: ${e.message}")
             }
@@ -59,16 +63,20 @@ class TraktScrobbleManager @Inject constructor(
     /**
      * Called when playback is paused.
      */
-    suspend fun scrobblePause(playbackId: String, mediaType: String, positionMs: Long, durationMs: Long) {
+    suspend fun scrobblePause(playbackId: String, mediaType: String, positionMs: Long, durationMs: Long, force: Boolean = false) {
+        Log.d(TAG, "scrobblePause called: id=$playbackId, type=$mediaType, force=$force, hasToken=${shouldScrobble()}")
         if (!shouldScrobble()) return
-        if (!isDebouncedOk()) return
+        if (!force && !isDebouncedOk()) { Log.d(TAG, "scrobblePause debounced"); return }
         val progress = calculateProgress(positionMs, durationMs)
-        val request = buildRequest(playbackId, mediaType, progress) ?: return
+        val request = buildRequest(playbackId, mediaType, progress)
+        if (request == null) { Log.w(TAG, "scrobblePause: buildRequest returned null"); return }
 
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobblePause(request)
-                Log.d(TAG, "pause: ${response.code()} progress=${"%.1f".format(progress)}%")
+                val body = response.body()?.string()
+                Log.d(TAG, "pause: ${response.code()} progress=${"%.1f".format(progress)}% body=$body")
+                if (!response.isSuccessful) Log.w(TAG, "pause error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
                 Log.w(TAG, "pause failed: ${e.message}")
             }
@@ -89,6 +97,7 @@ class TraktScrobbleManager @Inject constructor(
             try {
                 val response = traktSyncApi.scrobbleStop(request)
                 Log.d(TAG, "stop: ${response.code()} progress=${"%.1f".format(progress)}%")
+                if (!response.isSuccessful) Log.w(TAG, "stop error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
                 Log.w(TAG, "stop failed: ${e.message}")
             }
@@ -118,15 +127,19 @@ class TraktScrobbleManager @Inject constructor(
      */
     private fun buildRequest(playbackId: String, mediaType: String, progress: Float): TraktScrobbleRequest? {
         if (mediaType == "series") {
-            // Episode format: "tt1234567:1:3:0" → imdbId, season, episode, streamIdx
+            // Episode format: "tt1234567:1:3" or "tt1234567:1:3:0" (with optional stream index)
             val parts = playbackId.split(":")
-            if (parts.size < 4) {
+            if (parts.size < 3) {
                 Log.w(TAG, "Invalid episode playback ID: $playbackId")
                 return null
             }
-            val imdbId = parts.dropLast(3).joinToString(":") // handles IDs with colons
-            val season = parts[parts.size - 3].toIntOrNull() ?: return null
-            val episode = parts[parts.size - 2].toIntOrNull() ?: return null
+
+            // Last part might be stream index (numeric) — detect based on count
+            val hasStreamIndex = parts.size >= 4 && parts.last().toIntOrNull() != null
+            val dropCount = if (hasStreamIndex) 3 else 2
+            val imdbId = parts.dropLast(dropCount).joinToString(":")
+            val season = parts[parts.size - if (hasStreamIndex) 3 else 2].toIntOrNull() ?: return null
+            val episode = parts[parts.size - if (hasStreamIndex) 2 else 1].toIntOrNull() ?: return null
 
             return TraktScrobbleRequest(
                 show = TraktScrobbleShow(ids = TraktIds(imdb = imdbId)),

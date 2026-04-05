@@ -10,6 +10,8 @@ data class WatchHistoryEntity(
     @PrimaryKey val id: String,
     val title: String,
     val poster: String?,
+    val background: String? = null,
+    val logo: String? = null,
     val position: Long,
     val duration: Long,
     val lastWatched: Long,
