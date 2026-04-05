@@ -56,7 +56,7 @@ class PlayerViewModel @Inject constructor(
                 lastWatched = System.currentTimeMillis(),
                 type = type.ifBlank { "movie" },
                 watched = isCompleted,
-                scrobbled = existing?.scrobbled ?: false
+                scrobbled = existing?.scrobbled ?: traktScrobbleManager.isScrobbled(id)
             )
             dao.upsertHistory(entry)
         }

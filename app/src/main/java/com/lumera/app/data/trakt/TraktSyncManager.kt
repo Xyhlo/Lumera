@@ -34,7 +34,8 @@ class TraktSyncManager @Inject constructor(
     private var lastPlaybackActivity: String? = null
 
     // IDs currently being deleted from Trakt — sync skips these to prevent race conditions (Fix 5)
-    private val pendingDeletes = mutableSetOf<String>()
+    // Fix #2: Thread-safe set for concurrent access from sync poll and delete operations
+    private val pendingDeletes = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     /**
      * Lightweight check: queries /sync/last_activities and only runs
@@ -240,6 +241,7 @@ class TraktSyncManager @Inject constructor(
                 }
 
                 // 3. Fetch Trakt watched history with episode-level detail (Fix 2)
+                // Fix #7: If this fails, we get null — skip removals entirely to prevent data loss
                 val watchedData = fetchWatchedData()
 
                 // 4. Process local scrobbled in-progress items
@@ -252,7 +254,6 @@ class TraktSyncManager @Inject constructor(
                     if (local.id in pendingDeletes) continue
 
                     // Fix 1: strip stream index suffix for lookup
-                    // Local: "tt123:1:3:0" or "tt123:1:3", Trakt: "tt123:1:3"
                     val normalizedId = normalizePlaybackId(local.id)
 
                     val onTraktPlayback = normalizedId in traktPlaybackIds
@@ -262,9 +263,12 @@ class TraktSyncManager @Inject constructor(
                         continue
                     }
 
+                    // Fix #7: If watched data fetch failed, we can't determine if
+                    // the item was cleared vs finished. Skip to avoid data loss.
+                    if (watchedData == null) continue
+
                     // Not on Trakt playback. Check if the specific item was watched (Fix 2)
                     val onTraktWatched = if (local.type == "series") {
-                        // Check specific episode, not just the show
                         val parts = normalizedId.split(":")
                         if (parts.size >= 3) {
                             val showImdb = parts.dropLast(2).joinToString(":")
@@ -309,7 +313,12 @@ class TraktSyncManager @Inject constructor(
                         "movie" -> item.movie?.title ?: "Unknown"
                         else -> {
                             val ep = item.episode
-                            ep?.title ?: "S${ep?.season}:E${ep?.number} - ${item.show?.title ?: "Unknown"}"
+                            val showTitle = item.show?.title ?: "Unknown"
+                            when {
+                                ep?.title != null -> ep.title
+                                ep?.season != null && ep.number != null -> "S${ep.season}:E${ep.number} - $showTitle"
+                                else -> showTitle
+                            }
                         }
                     }
 
@@ -347,6 +356,10 @@ class TraktSyncManager @Inject constructor(
 
     // ── Internal ──
 
+    /**
+     * Fetch the complete Trakt watchlist. Returns null if ANY page fails,
+     * so callers never act on incomplete data. (Fix #3)
+     */
     private suspend fun fetchAllTraktWatchlist(): List<TraktWatchlistItem>? {
         val allItems = mutableListOf<TraktWatchlistItem>()
         var page = 1
@@ -354,8 +367,8 @@ class TraktSyncManager @Inject constructor(
         while (true) {
             val response = traktSyncApi.getWatchlist(page = page, limit = 100)
             if (!response.isSuccessful) {
-                Log.w(TAG, "Trakt watchlist fetch failed: ${response.code()}")
-                return if (allItems.isNotEmpty()) allItems else null
+                Log.w(TAG, "Trakt watchlist fetch failed on page $page: ${response.code()}")
+                return null // Fail entirely — never return partial data
             }
             val items = response.body() ?: break
             if (items.isEmpty()) break
@@ -423,29 +436,30 @@ class TraktSyncManager @Inject constructor(
 
     /**
      * Fetch watched history with episode-level detail.
+     * Returns null on failure so callers can skip removal logic. (Fix #7)
      */
-    private suspend fun fetchWatchedData(): WatchedData {
+    private suspend fun fetchWatchedData(): WatchedData? {
         val movieIds = mutableSetOf<String>()
         val episodeMap = mutableMapOf<String, MutableSet<Pair<Int, Int>>>()
         try {
             val moviesResponse = traktSyncApi.getWatchedMovies()
-            if (moviesResponse.isSuccessful) {
-                moviesResponse.body()?.forEach { it.movie.ids.imdb?.let { id -> movieIds.add(id) } }
-            }
+            if (!moviesResponse.isSuccessful) return null
+            moviesResponse.body()?.forEach { it.movie.ids.imdb?.let { id -> movieIds.add(id) } }
+
             val showsResponse = traktSyncApi.getWatchedShows()
-            if (showsResponse.isSuccessful) {
-                showsResponse.body()?.forEach { show ->
-                    val showImdb = show.show.ids.imdb ?: return@forEach
-                    val episodes = episodeMap.getOrPut(showImdb) { mutableSetOf() }
-                    show.seasons?.forEach { season ->
-                        season.episodes?.forEach { ep ->
-                            episodes.add(Pair(season.number, ep.number))
-                        }
+            if (!showsResponse.isSuccessful) return null
+            showsResponse.body()?.forEach { show ->
+                val showImdb = show.show.ids.imdb ?: return@forEach
+                val episodes = episodeMap.getOrPut(showImdb) { mutableSetOf() }
+                show.seasons?.forEach { season ->
+                    season.episodes?.forEach { ep ->
+                        episodes.add(Pair(season.number, ep.number))
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch watched history: ${e.message}")
+            Log.w(TAG, "Failed to fetch watched history", e)
+            return null
         }
         return WatchedData(movieIds, episodeMap)
     }

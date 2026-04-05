@@ -20,6 +20,11 @@ interface TraktApiService {
         @Body body: Map<String, String>
     ): Response<TraktTokenResponse>
 
+    @POST("oauth/token")
+    suspend fun refreshToken(
+        @Body body: Map<String, String>
+    ): Response<TraktTokenResponse>
+
     @POST("oauth/revoke")
     suspend fun revokeToken(
         @Body body: Map<String, String>

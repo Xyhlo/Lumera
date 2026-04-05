@@ -194,6 +194,44 @@ class TraktAuthManager @Inject constructor(
         _authState.value = DeviceAuthState.Expired
     }
 
+    // ── Token Refresh ──
+
+    /**
+     * Refresh the access token using the stored refresh token.
+     * Returns the new access token, or null if refresh failed.
+     * Called by TraktAuthInterceptor on 401 responses.
+     */
+    suspend fun refreshAccessToken(): String? {
+        val refreshToken = getRefreshToken() ?: return null
+        return try {
+            val response = traktApi.refreshToken(
+                mapOf(
+                    "refresh_token" to refreshToken,
+                    "client_id" to BuildConfig.TRAKT_CLIENT_ID,
+                    "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET,
+                    "redirect_uri" to "urn:ietf:wg:oauth:2.0:oob",
+                    "grant_type" to "refresh_token"
+                )
+            )
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                saveTokens(body)
+                Log.i(TAG, "Token refreshed successfully")
+                body.accessToken
+            } else {
+                Log.w(TAG, "Token refresh failed: ${response.code()}")
+                if (response.code() == 401 || response.code() == 403) {
+                    // Refresh token is also invalid — user needs to re-authenticate
+                    clearTokens()
+                }
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Token refresh error", e)
+            null
+        }
+    }
+
     // ── Disconnect ──
 
     suspend fun disconnect() {

@@ -110,13 +110,24 @@ class TraktScrobbleManager @Inject constructor(
 
     // ── Internal ──
 
-    /** Mark the watch history item as scrobbled so sync knows Trakt is aware of it. */
+    /**
+     * Mark the watch history item as scrobbled so sync knows Trakt is aware of it.
+     * Fix #9: The history entry may not exist yet (saveProgress runs on a 10-sec timer),
+     * so we track the ID and retry. PlayerViewModel.saveProgress preserves this flag.
+     */
+    private val scrobbledIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     private suspend fun markAsScrobbled(playbackId: String) {
-        val item = dao.getHistoryItem(playbackId) ?: return
-        if (!item.scrobbled) {
+        scrobbledIds.add(playbackId)
+        val item = dao.getHistoryItem(playbackId)
+        if (item != null && !item.scrobbled) {
             dao.upsertHistory(item.copy(scrobbled = true))
         }
+        // If item doesn't exist yet, saveProgress will pick up the flag via isScrobbled()
     }
+
+    /** Check if a playback ID has been scrobbled (for PlayerViewModel to use). */
+    fun isScrobbled(playbackId: String): Boolean = playbackId in scrobbledIds
 
     private fun shouldScrobble(): Boolean = traktAuthManager.getAccessToken() != null
 
