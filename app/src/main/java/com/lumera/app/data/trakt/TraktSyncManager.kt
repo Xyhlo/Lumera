@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,9 +30,9 @@ class TraktSyncManager @Inject constructor(
 
     private val syncMutex = Mutex()
 
-    // Last known activity timestamps from Trakt
-    private var lastWatchlistActivity: String? = null
-    private var lastPlaybackActivity: String? = null
+    // Last known activity timestamps from Trakt (Fix #4/#10: volatile for thread safety)
+    @Volatile private var lastWatchlistActivity: String? = null
+    @Volatile private var lastPlaybackActivity: String? = null
 
     // IDs currently being deleted from Trakt — sync skips these to prevent race conditions (Fix 5)
     // Fix #2: Thread-safe set for concurrent access from sync poll and delete operations
@@ -77,7 +78,7 @@ class TraktSyncManager @Inject constructor(
 
                 synced
             } catch (e: Exception) {
-                Log.w(TAG, "Activity check failed: ${e.message}")
+                Log.w(TAG, "Activity check failed", e)
                 false
             }
         }
@@ -86,19 +87,24 @@ class TraktSyncManager @Inject constructor(
     /**
      * Initial sync after first connecting Trakt.
      * Pushes all local items to Trakt, then does a normal sync.
+     * Fix #11: 30-second timeout prevents blocking the mutex indefinitely.
      */
-    suspend fun initialSync() = syncMutex.withLock {
-        withContext(Dispatchers.IO) {
-            try {
-                val localItems = dao.getWatchlistOnce()
-                if (localItems.isNotEmpty()) {
-                    pushToTrakt(localItems)
-                    Log.d(TAG, "Initial push: ${localItems.size} items")
+    suspend fun initialSync() {
+        withTimeoutOrNull(30_000L) {
+            syncMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val localItems = dao.getWatchlistOnce()
+                        if (localItems.isNotEmpty()) {
+                            pushToTrakt(localItems)
+                            Log.d(TAG, "Initial push: ${localItems.size} items")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Initial push failed", e)
+                    }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Initial push failed: ${e.message}")
             }
-        }
+        } ?: Log.w(TAG, "Initial sync timed out")
         syncWatchlist()
     }
 
@@ -158,7 +164,7 @@ class TraktSyncManager @Inject constructor(
                 Log.i(TAG, "Sync complete: pulled=${toPull.size}, removed=${toRemove.size}")
                 Result.success(Unit)
             } catch (e: Exception) {
-                Log.e(TAG, "Watchlist sync failed", e)
+                Log.e(TAG, "Watchlist sync failed: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -175,7 +181,7 @@ class TraktSyncManager @Inject constructor(
             try {
                 pushToTrakt(listOf(item))
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to push watchlist add to Trakt: ${e.message}")
+                Log.w(TAG, "Failed to push watchlist add to Trakt", e)
             }
         }
     }
@@ -195,7 +201,7 @@ class TraktSyncManager @Inject constructor(
                     Log.w(TAG, "Trakt watchlist remove failed: ${response.code()}")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to push watchlist remove to Trakt: ${e.message}")
+                Log.w(TAG, "Failed to push watchlist remove to Trakt", e)
             }
         }
     }
@@ -322,8 +328,11 @@ class TraktSyncManager @Inject constructor(
                         }
                     }
 
+                    // Fix #12: clamp progress to [0,100] and ensure position never exceeds duration
                     val estimatedDurationMs = 90 * 60 * 1000L
-                    val estimatedPositionMs = ((item.progress / 100f) * estimatedDurationMs).toLong()
+                    val clampedProgress = item.progress.coerceIn(0f, 100f)
+                    val estimatedPositionMs = ((clampedProgress / 100f) * estimatedDurationMs).toLong()
+                        .coerceIn(0L, estimatedDurationMs)
 
                     dao.upsertHistory(
                         WatchHistoryEntity(
@@ -501,7 +510,7 @@ class TraktSyncManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to delete playback from Trakt: ${e.message}")
+                Log.w(TAG, "Failed to delete playback from Trakt", e)
             } finally {
                 pendingDeletes.remove(normalizedId)
                 pendingDeletes.remove(localId)

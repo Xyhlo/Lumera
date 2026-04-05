@@ -37,7 +37,6 @@ class TraktScrobbleManager @Inject constructor(
     }
 
     private var lastScrobbleTimeMs = 0L
-    private var activePlaybackId: String? = null
 
     /**
      * Called when playback starts or resumes.
@@ -49,7 +48,6 @@ class TraktScrobbleManager @Inject constructor(
         val request = buildRequest(playbackId, mediaType, progress)
         if (request == null) { Log.w(TAG, "scrobbleStart: buildRequest returned null"); return }
 
-        activePlaybackId = playbackId
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobbleStart(request)
@@ -60,7 +58,7 @@ class TraktScrobbleManager @Inject constructor(
                     Log.w(TAG, "start error: ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "start failed: ${e.message}")
+                Log.w(TAG, "start failed for $playbackId", e)
             }
         }
     }
@@ -82,7 +80,7 @@ class TraktScrobbleManager @Inject constructor(
                 Log.d(TAG, "pause: ${response.code()} progress=${"%.1f".format(progress)}%")
                 if (!response.isSuccessful) Log.w(TAG, "pause error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
-                Log.w(TAG, "pause failed: ${e.message}")
+                Log.w(TAG, "pause failed for $playbackId", e)
             }
         }
     }
@@ -96,14 +94,13 @@ class TraktScrobbleManager @Inject constructor(
         val progress = calculateProgress(positionMs, durationMs)
         val request = buildRequest(playbackId, mediaType, progress) ?: return
 
-        activePlaybackId = null
         withContext(Dispatchers.IO) {
             try {
                 val response = traktSyncApi.scrobbleStop(request)
                 Log.d(TAG, "stop: ${response.code()} progress=${"%.1f".format(progress)}%")
                 if (!response.isSuccessful) Log.w(TAG, "stop error: ${response.errorBody()?.string()}")
             } catch (e: Exception) {
-                Log.w(TAG, "stop failed: ${e.message}")
+                Log.w(TAG, "stop failed for $playbackId", e)
             }
         }
     }
@@ -161,8 +158,12 @@ class TraktScrobbleManager @Inject constructor(
             val hasStreamIndex = parts.size >= 4 && parts.last().toIntOrNull() != null
             val dropCount = if (hasStreamIndex) 3 else 2
             val imdbId = parts.dropLast(dropCount).joinToString(":")
-            val season = parts[parts.size - if (hasStreamIndex) 3 else 2].toIntOrNull() ?: return null
-            val episode = parts[parts.size - if (hasStreamIndex) 2 else 1].toIntOrNull() ?: return null
+            val season = parts[parts.size - if (hasStreamIndex) 3 else 2].toIntOrNull()
+            val episode = parts[parts.size - if (hasStreamIndex) 2 else 1].toIntOrNull()
+            if (season == null || episode == null) {
+                Log.w(TAG, "Failed to parse season/episode from playback ID: $playbackId")
+                return null
+            }
 
             return TraktScrobbleRequest(
                 show = TraktScrobbleShow(ids = TraktIds(imdb = imdbId)),
