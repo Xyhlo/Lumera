@@ -105,7 +105,20 @@ class TraktAuthManager @Inject constructor(
         _isConnected.value = true
     }
 
-    fun getAccessToken(): String? = prefs.getString(profileKey(KEY_ACCESS_TOKEN), null)
+    fun getAccessToken(): String? {
+        val token = prefs.getString(profileKey(KEY_ACCESS_TOKEN), null) ?: return null
+        // Proactive expiry check: flag as needing refresh if within 60 seconds of expiry
+        val expiresAt = prefs.getLong(profileKey(KEY_EXPIRES_AT), 0L)
+        if (expiresAt > 0 && System.currentTimeMillis() / 1000 >= expiresAt - 60) {
+            Log.d(TAG, "Token expired or expiring soon, needs refresh")
+            needsRefresh = true
+        }
+        return token
+    }
+
+    /** True if the token is expired or about to expire. Checked by the interceptor. */
+    @Volatile var needsRefresh = false
+        private set
 
     private fun getRefreshToken(): String? = prefs.getString(profileKey(KEY_REFRESH_TOKEN), null)
 
@@ -216,6 +229,7 @@ class TraktAuthManager @Inject constructor(
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 saveTokens(body)
+                needsRefresh = false
                 Log.i(TAG, "Token refreshed successfully")
                 body.accessToken
             } else {

@@ -17,23 +17,39 @@ class TraktAuthInterceptor @Inject constructor(
         private const val TAG = "TraktAuthInterceptor"
     }
 
+    // Fix #14: prevent hammering the refresh endpoint
+    @Volatile private var refreshAttemptedForRequest = false
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        val original = chain.request()
+        var token = traktAuthManager.getAccessToken()
 
-        val token = traktAuthManager.getAccessToken()
-        val response = chain.proceed(buildRequest(original, token))
+        // Fix #7: proactively refresh if token is expired or about to expire
+        if (token != null && traktAuthManager.needsRefresh) {
+            Log.d(TAG, "Token expiring soon, proactive refresh")
+            val newToken = runBlocking { traktAuthManager.refreshAccessToken() }
+            if (newToken != null) {
+                token = newToken
+            }
+        }
 
-        // Fix #1: If we get a 401, try refreshing the token and retry once
-        if (response.code == 401 && token != null) {
+        val response = chain.proceed(buildRequest(chain.request(), token))
+
+        // If we get a 401, try refreshing the token and retry once
+        if (response.code == 401 && token != null && !refreshAttemptedForRequest) {
             Log.d(TAG, "Got 401, attempting token refresh")
+            refreshAttemptedForRequest = true
             response.close()
 
             val newToken = runBlocking { traktAuthManager.refreshAccessToken() }
+            refreshAttemptedForRequest = false
+
             if (newToken != null) {
                 Log.d(TAG, "Token refreshed, retrying request")
-                return chain.proceed(buildRequest(original, newToken))
+                return chain.proceed(buildRequest(chain.request(), newToken))
             } else {
-                Log.w(TAG, "Token refresh failed, returning 401")
+                Log.w(TAG, "Token refresh failed")
+                // Return a new response since we closed the original
+                return chain.proceed(buildRequest(chain.request(), token))
             }
         }
 
