@@ -311,8 +311,9 @@ fun CinematicLayout(
     }
 
     LaunchedEffect(instantFocusItem) {
+        val target = instantFocusItem ?: return@LaunchedEffect
         delay(300)
-        displayedItem = instantFocusItem
+        displayedItem = target
     }
 
     val density = LocalDensity.current

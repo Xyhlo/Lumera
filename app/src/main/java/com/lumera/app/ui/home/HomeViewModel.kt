@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -177,22 +178,24 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun appendItemsToRow(configId: String, newItems: List<MetaItem>) {
-        val updatedRows = _state.value.rows.map { r ->
-            if (r.configId == configId) r.copy(items = r.items + newItems)
-            else r
-        }
+        _state.update { current ->
+            val updatedRows = current.rows.map { r ->
+                if (r.configId == configId) r.copy(items = r.items + newItems)
+                else r
+            }
 
-        val updatedMixed = _state.value.mixedRows.map { item ->
-            if (item is CategoryRow && item.id == configId) {
-                val updatedRow = updatedRows.find { it.configId == configId }
-                if (updatedRow != null) CategoryRow.fromHomeRow(updatedRow) else item
-            } else item
-        }
+            val updatedMixed = current.mixedRows.map { item ->
+                if (item is CategoryRow && item.id == configId) {
+                    val updatedRow = updatedRows.find { it.configId == configId }
+                    if (updatedRow != null) CategoryRow.fromHomeRow(updatedRow) else item
+                } else item
+            }
 
-        _state.value = _state.value.copy(
-            rows = updatedRows,
-            mixedRows = updatedMixed
-        )
+            current.copy(
+                rows = updatedRows,
+                mixedRows = updatedMixed
+            )
+        }
     }
 
     /**
@@ -346,61 +349,61 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun applyMetadataFallbackToState(type: String, id: String, fallback: MetadataFallback, sourceItem: MetaItem? = null) {
-        val current = _state.value
-        var stateChanged = false
+        _state.update { current ->
+            var stateChanged = false
 
-        val updatedRows = current.rows.map { row ->
-            val (patchedItems, changed) = patchMetaListWithFallback(row.items, type, id, fallback)
-            if (changed) {
-                stateChanged = true
-                row.copy(items = patchedItems)
-            } else {
-                row
-            }
-        }
-
-        val updatedMixedRows = current.mixedRows.map { rowItem ->
-            if (rowItem is CategoryRow) {
-                val (patchedItems, changed) = patchMetaListWithFallback(rowItem.items, type, id, fallback)
+            val updatedRows = current.rows.map { row ->
+                val (patchedItems, changed) = patchMetaListWithFallback(row.items, type, id, fallback)
                 if (changed) {
                     stateChanged = true
-                    rowItem.copy(items = patchedItems)
+                    row.copy(items = patchedItems)
+                } else {
+                    row
+                }
+            }
+
+            val updatedMixedRows = current.mixedRows.map { rowItem ->
+                if (rowItem is CategoryRow) {
+                    val (patchedItems, changed) = patchMetaListWithFallback(rowItem.items, type, id, fallback)
+                    if (changed) {
+                        stateChanged = true
+                        rowItem.copy(items = patchedItems)
+                    } else {
+                        rowItem
+                    }
                 } else {
                     rowItem
                 }
-            } else {
-                rowItem
             }
-        }
 
-        val updatedHeroRow = current.heroRow?.let { hero ->
-            val (patchedItems, changed) = patchMetaListWithFallback(hero.items, type, id, fallback)
-            if (changed) {
-                stateChanged = true
-                hero.copy(items = patchedItems)
-            } else {
-                hero
+            val updatedHeroRow = current.heroRow?.let { hero ->
+                val (patchedItems, changed) = patchMetaListWithFallback(hero.items, type, id, fallback)
+                if (changed) {
+                    stateChanged = true
+                    hero.copy(items = patchedItems)
+                } else {
+                    hero
+                }
             }
-        }
 
-        // Store enriched preview for items not in any category row (e.g., search-discovered history items)
-        val enrichedKey = "$type:$id"
-        val updatedEnrichedMeta = if (sourceItem != null && !current.enrichedMeta.containsKey(enrichedKey)) {
-            val enriched = applyFallbackToMeta(sourceItem, fallback)
-            if (enriched != sourceItem) {
-                stateChanged = true
-                current.enrichedMeta + (enrichedKey to enriched)
+            val enrichedKey = "$type:$id"
+            val updatedEnrichedMeta = if (sourceItem != null && !current.enrichedMeta.containsKey(enrichedKey)) {
+                val enriched = applyFallbackToMeta(sourceItem, fallback)
+                if (enriched != sourceItem) {
+                    stateChanged = true
+                    current.enrichedMeta + (enrichedKey to enriched)
+                } else current.enrichedMeta
             } else current.enrichedMeta
-        } else current.enrichedMeta
 
-        if (!stateChanged) return
+            if (!stateChanged) return@update current
 
-        _state.value = current.copy(
-            rows = updatedRows,
-            mixedRows = updatedMixedRows,
-            heroRow = updatedHeroRow,
-            enrichedMeta = updatedEnrichedMeta
-        )
+            current.copy(
+                rows = updatedRows,
+                mixedRows = updatedMixedRows,
+                heroRow = updatedHeroRow,
+                enrichedMeta = updatedEnrichedMeta
+            )
+        }
     }
 
     private val tmdbEnrichmentInFlight = mutableSetOf<String>()
@@ -446,7 +449,7 @@ class HomeViewModel @Inject constructor(
                     genres = enrichment.genres.ifEmpty { null }
                 )
 
-                applyTmdbEnrichmentToState(item.type, item.id, fallback)
+                applyTmdbEnrichmentToState(item.type, item.id, fallback, item)
             } catch (e: Exception) {
                 Log.w("HomeViewModel", "TMDB enrichment failed for ${item.id}: ${e.message}")
                 markTmdbEnriched(item.type, item.id)
@@ -457,59 +460,74 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun markTmdbEnriched(type: String, id: String) {
-        val current = _state.value
-        _state.value = current.copy(tmdbEnrichedIds = current.tmdbEnrichedIds + "$type:$id")
+        _state.update { it.copy(tmdbEnrichedIds = it.tmdbEnrichedIds + "$type:$id") }
     }
 
     /**
      * Applies TMDB enrichment to state — overwrites fields (unlike addon fallback which only fills blanks).
      * This ensures localized content from TMDB takes priority.
      */
-    private fun applyTmdbEnrichmentToState(type: String, id: String, fallback: MetadataFallback) {
-        val current = _state.value
-        var stateChanged = false
+    private fun applyTmdbEnrichmentToState(type: String, id: String, fallback: MetadataFallback, sourceItem: MetaItem) {
+        _state.update { current ->
+            var rowsChanged = false
 
-        fun overwriteMeta(meta: MetaItem): MetaItem {
-            if (meta.type != type || meta.id != id) return meta
-            // Keep addon poster — only enrich rich metadata fields
-            val updated = meta.copy(
-                background = fallback.background ?: meta.background,
-                logo = fallback.logo ?: meta.logo,
-                description = fallback.description ?: meta.description,
-                releaseInfo = fallback.releaseInfo ?: meta.releaseInfo,
-                imdbRating = fallback.imdbRating ?: meta.imdbRating,
-                runtime = fallback.runtime ?: meta.runtime,
-                genres = fallback.genres ?: meta.genres
+            fun overwriteMeta(meta: MetaItem): MetaItem {
+                if (meta.type != type || meta.id != id) return meta
+                val updated = meta.copy(
+                    background = fallback.background ?: meta.background,
+                    logo = fallback.logo ?: meta.logo,
+                    description = fallback.description ?: meta.description,
+                    releaseInfo = fallback.releaseInfo ?: meta.releaseInfo,
+                    imdbRating = fallback.imdbRating ?: meta.imdbRating,
+                    runtime = fallback.runtime ?: meta.runtime,
+                    genres = fallback.genres ?: meta.genres
+                )
+                if (updated != meta) rowsChanged = true
+                return updated
+            }
+
+            val updatedRows = current.rows.map { row ->
+                val patched = row.items.map { overwriteMeta(it) }
+                if (rowsChanged) row.copy(items = patched) else row
+            }
+
+            val updatedMixedRows = current.mixedRows.map { rowItem ->
+                if (rowItem is CategoryRow) {
+                    val patched = rowItem.items.map { overwriteMeta(it) }
+                    if (rowsChanged) rowItem.copy(items = patched) else rowItem
+                } else rowItem
+            }
+
+            val updatedHeroRow = current.heroRow?.let { hero ->
+                val patched = hero.items.map { overwriteMeta(it) }
+                if (rowsChanged) hero.copy(items = patched) else hero
+            }
+
+            // Always store enriched preview in enrichedMeta so continue watching
+            // items (which aren't in category rows) can pick up TMDB metadata.
+            val enrichedKey = "$type:$id"
+            val base = current.enrichedMeta[enrichedKey] ?: sourceItem
+            val enriched = base.copy(
+                background = fallback.background ?: base.background,
+                logo = fallback.logo ?: base.logo,
+                description = fallback.description ?: base.description,
+                releaseInfo = fallback.releaseInfo ?: base.releaseInfo,
+                imdbRating = fallback.imdbRating ?: base.imdbRating,
+                runtime = fallback.runtime ?: base.runtime,
+                genres = fallback.genres ?: base.genres
             )
-            if (updated != meta) stateChanged = true
-            return updated
+            val updatedEnrichedMeta = if (enriched != base || !current.enrichedMeta.containsKey(enrichedKey)) {
+                current.enrichedMeta + (enrichedKey to enriched)
+            } else current.enrichedMeta
+
+            current.copy(
+                rows = if (rowsChanged) updatedRows else current.rows,
+                mixedRows = if (rowsChanged) updatedMixedRows else current.mixedRows,
+                heroRow = if (rowsChanged) updatedHeroRow else current.heroRow,
+                enrichedMeta = updatedEnrichedMeta,
+                tmdbEnrichedIds = current.tmdbEnrichedIds + "$type:$id"
+            )
         }
-
-        val updatedRows = current.rows.map { row ->
-            val patched = row.items.map { overwriteMeta(it) }
-            if (stateChanged) row.copy(items = patched) else row
-        }
-
-        val updatedMixedRows = current.mixedRows.map { rowItem ->
-            if (rowItem is CategoryRow) {
-                val patched = rowItem.items.map { overwriteMeta(it) }
-                if (stateChanged) rowItem.copy(items = patched) else rowItem
-            } else rowItem
-        }
-
-        val updatedHeroRow = current.heroRow?.let { hero ->
-            val patched = hero.items.map { overwriteMeta(it) }
-            if (stateChanged) hero.copy(items = patched) else hero
-        }
-
-        if (!stateChanged) return
-
-        _state.value = current.copy(
-            rows = updatedRows,
-            mixedRows = updatedMixedRows,
-            heroRow = updatedHeroRow,
-            tmdbEnrichedIds = current.tmdbEnrichedIds + "$type:$id"
-        )
     }
 
     fun loadScreen(screenName: String, currentProfile: com.lumera.app.data.model.ProfileEntity?) {
@@ -549,13 +567,13 @@ class HomeViewModel @Inject constructor(
             // Load History + Series Next Up only for Home
             if (screenName == "home") {
                 launch {
-                    dao.getWatchHistory().collect {
-                        _state.value = _state.value.copy(history = it)
+                    dao.getWatchHistory().collect { history ->
+                        _state.update { it.copy(history = history) }
                     }
                 }
                 launch {
-                    dao.getActiveSeriesNextUp().collect {
-                        _state.value = _state.value.copy(seriesNextUp = it)
+                    dao.getActiveSeriesNextUp().collect { nextUp ->
+                        _state.update { it.copy(seriesNextUp = nextUp) }
                     }
                 }
             } else {
@@ -595,22 +613,24 @@ class HomeViewModel @Inject constructor(
                 val initialMixedList = (hubRows + initialRows.map { CategoryRow.fromHomeRow(it) })
                     .sortedBy { it.order }
 
-                _state.value = _state.value.copy(
-                    mixedRows = initialMixedList,
-                    rows = initialRows,
-                    hubRows = hubRows,
-                    heroRow = heroRow,
-                    isLoading = false,
-                    loadedScreen = screenName,
-                    loadedProfileId = currentProfileId
-                )
+                // Cache profile for TMDB enrichment (called per-item as they become visible)
+                tmdbProfileCache = currentProfile
+
+                _state.update {
+                    it.copy(
+                        mixedRows = initialMixedList,
+                        rows = initialRows,
+                        hubRows = hubRows,
+                        heroRow = heroRow,
+                        isLoading = false,
+                        loadedScreen = screenName,
+                        loadedProfileId = currentProfileId,
+                        tmdbEnabled = currentProfile?.tmdbEnabled == true
+                    )
+                }
 
                 // Start a tiny metadata warmup pass for items likely to render first.
                 prefetchLikelyVisibleMetadata(rows = initialRows, heroRow = heroRow)
-
-                // Cache profile for TMDB enrichment (called per-item as they become visible)
-                tmdbProfileCache = currentProfile
-                _state.value = _state.value.copy(tmdbEnabled = currentProfile?.tmdbEnabled == true)
 
                 // Stage 2: Load remaining categories in the background and append.
                 launch {
@@ -620,32 +640,33 @@ class HomeViewModel @Inject constructor(
                     )
                     if (remainingRows.isEmpty()) return@launch
 
-                    val currentState = _state.value
-                    if (currentState.loadedScreen != screenName || currentState.loadedProfileId != currentProfileId) {
-                        return@launch
+                    _state.update { currentState ->
+                        if (currentState.loadedScreen != screenName || currentState.loadedProfileId != currentProfileId) {
+                            return@update currentState
+                        }
+
+                        val allRows = (currentState.rows + remainingRows)
+                            .distinctBy { it.configId }
+                            .sortedBy { it.order }
+
+                        val resolvedHeroRow = when {
+                            currentState.heroRow != null -> currentState.heroRow
+                            heroConfig?.categoryId != null -> allRows.find { it.configId == heroConfig.categoryId }
+                            else -> null
+                        }
+
+                        val mixedList = (hubRows + allRows.map { CategoryRow.fromHomeRow(it) })
+                            .sortedBy { it.order }
+
+                        currentState.copy(
+                            mixedRows = mixedList,
+                            rows = allRows,
+                            heroRow = resolvedHeroRow
+                        )
                     }
-
-                    val allRows = (currentState.rows + remainingRows)
-                        .distinctBy { it.configId }
-                        .sortedBy { it.order }
-
-                    val resolvedHeroRow = when {
-                        currentState.heroRow != null -> currentState.heroRow
-                        heroConfig?.categoryId != null -> allRows.find { it.configId == heroConfig.categoryId }
-                        else -> null
-                    }
-
-                    val mixedList = (hubRows + allRows.map { CategoryRow.fromHomeRow(it) })
-                        .sortedBy { it.order }
-
-                    _state.value = currentState.copy(
-                        mixedRows = mixedList,
-                        rows = allRows,
-                        heroRow = resolvedHeroRow
-                    )
                 }
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false)
+                _state.update { it.copy(isLoading = false) }
             }
         }
     }
@@ -680,9 +701,11 @@ class HomeViewModel @Inject constructor(
                 )
                 if (fetchedRow != null) {
                     // Cache fetched row so GridView can lazy-load additional pages via loadMoreItems().
-                    val updatedRows = _state.value.rows
-                        .filterNot { it.configId == fetchedRow.configId } + fetchedRow
-                    _state.value = _state.value.copy(rows = updatedRows)
+                    _state.update { current ->
+                        val updatedRows = current.rows
+                            .filterNot { it.configId == fetchedRow.configId } + fetchedRow
+                        current.copy(rows = updatedRows)
+                    }
                     onResult(fetchedRow.title, fetchedRow.items)
                 }
             } catch (_: Exception) {
