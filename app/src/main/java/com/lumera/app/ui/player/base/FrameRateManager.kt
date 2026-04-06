@@ -8,7 +8,7 @@ import kotlin.math.abs
 
 /**
  * Manages display refresh rate switching to match video frame rate.
- * Inspired by Nuvio/ARVIO: snaps to standard rates, picks exact → 2x → 2.5x → fallback,
+ * Snaps to standard rates, picks exact → 2x → 2.5x → fallback,
  * and restores the original mode on release.
  */
 class FrameRateManager(private val activity: Activity) {

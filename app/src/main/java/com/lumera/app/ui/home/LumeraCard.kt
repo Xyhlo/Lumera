@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -131,11 +132,21 @@ fun LumeraCard(
                 if (progress > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 5.dp)
                             .height(3.dp)
-                            .align(Alignment.BottomStart)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(Color.White.copy(0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                .clip(RoundedCornerShape(1.5.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
             }
         }

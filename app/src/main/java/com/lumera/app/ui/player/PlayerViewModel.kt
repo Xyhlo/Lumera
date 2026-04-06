@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-private const val WATCHED_THRESHOLD = 0.90 // 90% — matches ARVIO, above Trakt's 80% minimum
+private const val WATCHED_THRESHOLD = 0.90 // 90% — above Trakt's 80% minimum
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(

@@ -761,6 +761,8 @@ fun DetailsScreen(
 
         GlassSidebar(
             state = sidebarState,
+            episodeProgressMap = state.episodeProgressMap,
+            episodeEnrichmentMap = state.episodeEnrichmentMap,
             onDismiss = { viewModel.closeSidebar() },
             onBack = { viewModel.goBackInSidebar() },
             onEpisodeSelected = { episode ->

@@ -14,6 +14,7 @@ import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.SubtitleRepository
 import com.lumera.app.data.stream.StreamSortingService
 import com.lumera.app.data.tmdb.TmdbEnrichment
+import com.lumera.app.data.tmdb.TmdbEpisodeEnrichment
 import com.lumera.app.data.tmdb.TmdbMetaPreview
 import com.lumera.app.data.tmdb.TmdbMetadataService
 import com.lumera.app.data.tmdb.TmdbService
@@ -54,6 +55,12 @@ class DetailsViewModel @Inject constructor(
     private val traktSyncManager: TraktSyncManager
 ) : ViewModel() {
 
+    /** Per-episode watch progress for the episodes sidebar. */
+    data class EpisodeProgress(
+        val progress: Float,  // 0.0–1.0
+        val watched: Boolean
+    )
+
     data class DetailsState(
         val meta: MetaItem? = null,
         val resolvedId: String? = null, // IMDb ID resolved from tmdb: prefixes, used for stream/subtitle fetching
@@ -66,6 +73,8 @@ class DetailsViewModel @Inject constructor(
         val availableStreams: List<Stream> = emptyList(),
         val sidebarState: SidebarState = SidebarState.Closed,
         val progressCleared: Boolean = false,
+        val episodeProgressMap: Map<String, EpisodeProgress> = emptyMap(), // "S1:E3" → progress
+        val episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(), // "S1:E3" → TMDB data
         // TMDB enrichment
         val tmdbEnabled: Boolean = false,
         val tmdbLoading: Boolean = false,
@@ -148,12 +157,18 @@ class DetailsViewModel @Inject constructor(
                 } else {
                     dao.getHistoryItem(streamFetchId)?.id
                 }
+                // Build per-episode progress map for the episodes sidebar
+                val episodeProgressMap = if (details.type == "series") {
+                    buildEpisodeProgressMap(streamFetchId)
+                } else emptyMap()
+
                 _state.value = _state.value.copy(
                     meta = details,
                     resolvedId = streamFetchId,
                     contentKey = requestKey,
                     isLoading = false,
                     resumePlaybackId = resumePlaybackId,
+                    episodeProgressMap = episodeProgressMap,
                     autoPlayStream = null,
                     addonSubtitles = emptyList(),
                     availableStreams = emptyList(),
@@ -197,9 +212,13 @@ class DetailsViewModel @Inject constructor(
                 dao.getHistoryItem(meta.id)?.id
             }
             if (_state.value.meta?.id == meta.id && _state.value.meta?.type == meta.type) {
+                val episodeProgressMap = if (meta.type == "series") {
+                    buildEpisodeProgressMap(meta.id)
+                } else emptyMap()
                 _state.value = _state.value.copy(
                     resumePlaybackId = resumePlaybackId,
-                    autoPlayStream = null
+                    autoPlayStream = null,
+                    episodeProgressMap = episodeProgressMap
                 )
             }
         }
@@ -207,6 +226,36 @@ class DetailsViewModel @Inject constructor(
 
     fun refreshResumeState() {
         refreshResumeStateIfNeeded(_state.value.meta)
+    }
+
+    /**
+     * Build a map of "S{season}:E{episode}" → EpisodeProgress from watch history.
+     * Checks both with and without stream index suffix.
+     */
+    private suspend fun buildEpisodeProgressMap(seriesId: String): Map<String, EpisodeProgress> {
+        val historyItems = dao.getSeriesEpisodeHistory("$seriesId:%")
+        if (historyItems.isEmpty()) return emptyMap()
+
+        val map = mutableMapOf<String, EpisodeProgress>()
+        for (item in historyItems) {
+            val parts = item.id.split(":")
+            if (parts.size < 3) continue
+            // Extract season and episode from the playback ID
+            val hasStreamIndex = parts.size >= 4 && parts.last().toIntOrNull() != null
+            val season = parts[parts.size - if (hasStreamIndex) 3 else 2].toIntOrNull() ?: continue
+            val episode = parts[parts.size - if (hasStreamIndex) 2 else 1].toIntOrNull() ?: continue
+            val key = "S${season}:E${episode}"
+
+            // Keep the most recent entry if there are duplicates
+            val existing = map[key]
+            if (existing == null || (!existing.watched && item.watched)) {
+                map[key] = EpisodeProgress(
+                    progress = item.progress(),
+                    watched = item.watched
+                )
+            }
+        }
+        return map
     }
 
     private fun loadTmdbEnrichment(type: String, videoId: String, contentKey: String) {
@@ -275,6 +324,18 @@ class DetailsViewModel @Inject constructor(
                     )
                 } else currentMeta
 
+                // Fetch per-episode enrichment for series (synopsis, runtime, thumbnails)
+                val episodeEnrichmentMap = if (mediaType == "tv" && tmdbId != null) {
+                    val seasons = enrichedMeta?.videos
+                        ?.filter { it.season > 0 }
+                        ?.map { it.season }
+                        ?.distinct() ?: emptyList()
+                    if (seasons.isNotEmpty()) {
+                        val raw = tmdbMetadataService.fetchEpisodeEnrichment(tmdbId, seasons, language)
+                        raw.mapKeys { (key, _) -> "S${key.first}:E${key.second}" }
+                    } else emptyMap()
+                } else emptyMap()
+
                 _state.value = _state.value.copy(
                     meta = enrichedMeta,
                     tmdbLoading = false,
@@ -282,7 +343,8 @@ class DetailsViewModel @Inject constructor(
                     tmdbRecommendations = recommendations,
                     tmdbVideos = videos,
                     tmdbCollection = collection,
-                    tmdbCollectionName = enrichment?.collectionName
+                    tmdbCollectionName = enrichment?.collectionName,
+                    episodeEnrichmentMap = episodeEnrichmentMap
                 )
             } catch (e: CancellationException) {
                 throw e

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
+import com.lumera.app.data.tmdb.TmdbEpisodeEnrichment
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -106,6 +107,8 @@ fun GlassSidebarScaffold(
 fun GlassSidebar(
     state: SidebarState,
     currentEpisodeId: String? = null,
+    episodeProgressMap: Map<String, DetailsViewModel.EpisodeProgress> = emptyMap(),
+    episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(),
     onEpisodeSelected: (MetaVideo) -> Unit,
     onSourceSelected: (Stream) -> Unit,
     onBack: () -> Unit,
@@ -150,18 +153,22 @@ fun GlassSidebar(
         if (isVisible) { delay(200); runCatching { focusRequester.requestFocus() } }
     }
 
+    val isEpisodes = state is SidebarState.Episodes
     GlassSidebarScaffold(
         visible = isVisible,
-        onDismiss = onDismiss
+        onDismiss = onDismiss,
+        panelWidth = if (isEpisodes) 620.dp else 500.dp
     ) {
         Crossfade(targetState = state, label = "Sidebar") { current ->
             when (current) {
                 is SidebarState.Episodes -> EpisodesContent(
                     videos = current.videos,
-                    listState = episodesListState, // Pass the hoisted state
+                    listState = episodesListState,
                     savedSeason = savedSeason,
                     savedIndex = savedIndex,
                     currentEpisodeId = currentEpisodeId,
+                    episodeProgressMap = episodeProgressMap,
+                    episodeEnrichmentMap = episodeEnrichmentMap,
                     focusRequester = focusRequester,
                     onEpisodeClick = { ep, s, i -> savedSeason = s; savedIndex = i; onEpisodeSelected(ep) },
                     onSeasonChange = { savedSeason = it },
@@ -187,10 +194,12 @@ fun GlassSidebar(
 @Composable
 fun EpisodesContent(
     videos: List<MetaVideo>,
-    listState: LazyListState, // Received from parent
+    listState: LazyListState,
     savedSeason: Int?,
     savedIndex: Int,
     currentEpisodeId: String? = null,
+    episodeProgressMap: Map<String, DetailsViewModel.EpisodeProgress> = emptyMap(),
+    episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(),
     focusRequester: FocusRequester,
     onEpisodeClick: (MetaVideo, Int, Int) -> Unit,
     onSeasonChange: (Int) -> Unit,
@@ -254,9 +263,15 @@ fun EpisodesContent(
                         ep.id == currentEpisodeId ||
                         currentEpisodeId.endsWith(":${ep.season}:${ep.episode}")
                     )
+                    val epKey = "S${ep.season}:E${ep.episode}"
+                    val epProgress = episodeProgressMap[epKey]
+                    val epEnrichment = episodeEnrichmentMap[epKey]
                     EpisodeItem(
                         episode = ep,
                         isPlaying = isCurrentEpisode,
+                        progress = epProgress?.progress,
+                        isWatched = epProgress?.watched ?: false,
+                        enrichment = epEnrichment,
                         modifier = mod
                     ) { onEpisodeClick(ep, selectedSeason, index) }
                 }
@@ -469,30 +484,164 @@ fun SeasonTab(number: Int, isSelected: Boolean, modifier: Modifier, onClick: () 
 }
 
 @Composable
-fun EpisodeItem(episode: MetaVideo, isPlaying: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun EpisodeItem(
+    episode: MetaVideo,
+    isPlaying: Boolean = false,
+    progress: Float? = null,
+    isWatched: Boolean = false,
+    enrichment: TmdbEpisodeEnrichment? = null,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     var isFocused by remember { mutableStateOf(false) }
     val primary = MaterialTheme.colorScheme.primary
-    val title = if (episode.title.isBlank() || episode.title == "Episode") "Episode ${episode.episode}" else episode.title
+
+    // Use TMDB data when available, fall back to addon data
+    val title = enrichment?.title
+        ?: episode.title.takeIf { it.isNotBlank() && it != "Episode" }
+        ?: "Episode ${episode.episode}"
+    val overview = enrichment?.overview ?: episode.overview
+    val thumbnail = enrichment?.thumbnail ?: episode.thumbnail
+    val runtime = enrichment?.runtimeMinutes
+    val releaseDate = remember(enrichment?.airDate, episode.released) {
+        enrichment?.airDate ?: episode.released?.take(10)
+    }
 
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-            .background(if (isFocused) Color.White.copy(0.1f) else Color.Transparent)
-            .border(if (isFocused) 3.dp else 0.dp, if (isFocused) primary else Color.Transparent, RoundedCornerShape(8.dp))
-            .onFocusChanged { isFocused = it.isFocused }.clickable(onClick = onClick).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier
+            .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
+            .clickable(onClick = onClick)
+            .focusable()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        if (episode.thumbnail != null) {
-            AsyncImage(episode.thumbnail, null, Modifier.width(120.dp).aspectRatio(16f/9f).clip(RoundedCornerShape(4.dp)), contentScale = ContentScale.Crop)
-            Spacer(Modifier.width(12.dp))
+        // Thumbnail with progress bar overlay and S:E label
+        Box(
+            Modifier
+                .width(200.dp)
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(6.dp))
+                .border(
+                    if (isFocused) 2.dp else 0.dp,
+                    if (isFocused) primary else Color.Transparent,
+                    RoundedCornerShape(6.dp)
+                )
+        ) {
+            if (thumbnail != null) {
+                AsyncImage(
+                    thumbnail, null,
+                    Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(Modifier.fillMaxSize().background(Color.White.copy(0.08f)))
+            }
+
+            // Watched overlay
+            if (isWatched) {
+                Box(
+                    Modifier.fillMaxSize().background(Color.Black.copy(0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("✓", color = primary, style = MaterialTheme.typography.headlineMedium)
+                }
+            }
+
+            // S:E label at bottom-left
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .background(Color.Black.copy(0.7f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    "S${episode.season} : E${episode.episode}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White
+                )
+            }
+
+            // Progress bar floating near bottom of thumbnail
+            if (progress != null && progress > 0f && !isWatched) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
+                        .background(Color.White.copy(0.3f))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(primary)
+                    )
+                }
+            }
         }
-        Text("${episode.episode}. $title", color = if (isFocused) Color.White else Color.LightGray, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        if (isPlaying) {
+
+        Spacer(Modifier.width(14.dp))
+
+        // Episode info (right side of thumbnail)
+        Column(Modifier.weight(1f)) {
+            // Title
             Text(
-                "Playing",
-                style = MaterialTheme.typography.labelSmall,
-                color = primary,
-                modifier = Modifier.padding(start = 8.dp)
+                title,
+                color = when {
+                    isWatched -> Color.White.copy(0.4f)
+                    isFocused -> Color.White
+                    else -> Color.White.copy(0.85f)
+                },
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+
+            // Synopsis
+            if (!overview.isNullOrBlank()) {
+                Text(
+                    overview,
+                    color = Color.White.copy(0.5f),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 5,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            // Runtime + release date + status
+            Row(
+                modifier = Modifier.padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (runtime != null) {
+                    Text(
+                        "(${runtime} min)",
+                        color = Color.White.copy(0.4f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (releaseDate != null) {
+                    Text(
+                        releaseDate,
+                        color = Color.White.copy(0.35f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (isPlaying) {
+                    Text(
+                        "Playing",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = primary
+                    )
+                }
+            }
         }
     }
 }

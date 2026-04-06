@@ -166,7 +166,7 @@ fun LumeraLandscapeCard(
                         .align(Alignment.BottomStart)
                         .padding(
                             start = 10.dp,
-                            bottom = if (progress > 0f) 7.dp else 6.dp
+                            bottom = if (progress > 0f) 12.dp else 6.dp
                         )
                 ) {
                     if (!logoUrl.isNullOrEmpty()) {
@@ -209,11 +209,21 @@ fun LumeraLandscapeCard(
                 if (progress > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
                             .height(3.dp)
-                            .align(Alignment.BottomStart)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(Color.White.copy(0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                .clip(RoundedCornerShape(1.5.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
             }
         }
