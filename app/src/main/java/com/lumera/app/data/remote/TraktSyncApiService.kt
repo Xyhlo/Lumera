@@ -59,6 +59,16 @@ interface TraktSyncApiService {
     @GET("sync/watched/shows")
     suspend fun getWatchedShows(): Response<List<TraktWatchedShow>>
 
+    @POST("sync/history")
+    suspend fun addToHistory(
+        @Body body: TraktSyncRequest
+    ): Response<TraktSyncResponse>
+
+    @POST("sync/history/remove")
+    suspend fun removeFromHistory(
+        @Body body: TraktSyncRequest
+    ): Response<TraktSyncResponse>
+
     // ── Scrobble ──
 
     @POST("scrobble/start")

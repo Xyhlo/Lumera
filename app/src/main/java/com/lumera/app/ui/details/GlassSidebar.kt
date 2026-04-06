@@ -1,6 +1,9 @@
 package com.lumera.app.ui.details
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -39,10 +42,10 @@ sealed class SidebarState {
     data class Sources(val streamTitle: String, val streams: List<Stream>?, val selectedStreamId: String? = null) : SidebarState()
 }
 
-// Reusable modifier for D-Pad navigation (Traps Left, Handles Back)
-private fun Modifier.dpadNavigation(onBack: () -> Unit) = this.onPreviewKeyEvent {
+// Handles Back key for sidebar dismissal. Left trapping is handled per-item via focusProperties.
+private fun Modifier.dpadNavigation(onBack: () -> Unit, trapLeft: Boolean = true) = this.onPreviewKeyEvent {
     when {
-        it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown -> true
+        trapLeft && it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown -> true
         it.key == Key.Back && it.type == KeyEventType.KeyUp -> { onBack(); true }
         else -> false
     }
@@ -109,6 +112,7 @@ fun GlassSidebar(
     currentEpisodeId: String? = null,
     episodeProgressMap: Map<String, DetailsViewModel.EpisodeProgress> = emptyMap(),
     episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(),
+    onToggleWatched: (MetaVideo) -> Unit = {},
     onEpisodeSelected: (MetaVideo) -> Unit,
     onSourceSelected: (Stream) -> Unit,
     onBack: () -> Unit,
@@ -169,6 +173,7 @@ fun GlassSidebar(
                     currentEpisodeId = currentEpisodeId,
                     episodeProgressMap = episodeProgressMap,
                     episodeEnrichmentMap = episodeEnrichmentMap,
+                    onToggleWatched = onToggleWatched,
                     focusRequester = focusRequester,
                     onEpisodeClick = { ep, s, i -> savedSeason = s; savedIndex = i; onEpisodeSelected(ep) },
                     onSeasonChange = { savedSeason = it },
@@ -200,6 +205,7 @@ fun EpisodesContent(
     currentEpisodeId: String? = null,
     episodeProgressMap: Map<String, DetailsViewModel.EpisodeProgress> = emptyMap(),
     episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(),
+    onToggleWatched: (MetaVideo) -> Unit = {},
     focusRequester: FocusRequester,
     onEpisodeClick: (MetaVideo, Int, Int) -> Unit,
     onSeasonChange: (Int) -> Unit,
@@ -248,7 +254,7 @@ fun EpisodesContent(
         LazyColumn(
             state = listState, // Using the hoisted state
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.dpadNavigation(onDismiss)
+            modifier = Modifier.dpadNavigation(onDismiss, trapLeft = false)
         ) {
             if (episodes.isEmpty()) item { Text("No episodes found.", color = Color.Gray) }
             else {
@@ -272,8 +278,10 @@ fun EpisodesContent(
                         progress = epProgress?.progress,
                         isWatched = epProgress?.watched ?: false,
                         enrichment = epEnrichment,
-                        modifier = mod
-                    ) { onEpisodeClick(ep, selectedSeason, index) }
+                        onToggleWatched = { onToggleWatched(ep) },
+                        thumbnailModifier = mod,
+                        onClick = { onEpisodeClick(ep, selectedSeason, index) }
+                    )
                 }
             }
         }
@@ -490,11 +498,17 @@ fun EpisodeItem(
     progress: Float? = null,
     isWatched: Boolean = false,
     enrichment: TmdbEpisodeEnrichment? = null,
-    modifier: Modifier = Modifier,
+    onToggleWatched: () -> Unit = {},
+    thumbnailModifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    var rowFocused by remember { mutableStateOf(false) }
+    var thumbnailFocused by remember { mutableStateOf(false) }
+    var buttonFocused by remember { mutableStateOf(false) }
+    val isFocused = thumbnailFocused || buttonFocused
     val primary = MaterialTheme.colorScheme.primary
+    val thumbnailRequester = remember { FocusRequester() }
+    val buttonRequester = remember { FocusRequester() }
 
     // Use TMDB data when available, fall back to addon data
     val title = enrichment?.title
@@ -508,25 +522,28 @@ fun EpisodeItem(
     }
 
     Row(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .onFocusChanged { isFocused = it.isFocused }
-            .clickable(onClick = onClick)
-            .focusable()
+            .onFocusChanged { rowFocused = it.hasFocus }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.Top
     ) {
         // Thumbnail with progress bar overlay and S:E label
         Box(
-            Modifier
+            thumbnailModifier
                 .width(200.dp)
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(6.dp))
                 .border(
-                    if (isFocused) 2.dp else 0.dp,
-                    if (isFocused) primary else Color.Transparent,
+                    if (thumbnailFocused) 2.dp else 0.dp,
+                    if (thumbnailFocused) primary else Color.Transparent,
                     RoundedCornerShape(6.dp)
                 )
+                .focusRequester(thumbnailRequester)
+                .focusProperties { left = FocusRequester.Cancel; right = buttonRequester }
+                .onFocusChanged { thumbnailFocused = it.isFocused }
+                .clickable(onClick = onClick)
+                .focusable()
         ) {
             if (thumbnail != null) {
                 AsyncImage(
@@ -642,6 +659,87 @@ fun EpisodeItem(
                     )
                 }
             }
+        }
+
+        // Mark as watched toggle button
+        Spacer(Modifier.width(8.dp))
+        WatchedToggleButton(
+            isWatched = isWatched,
+            isFocused = buttonFocused,
+            focusRequester = buttonRequester,
+            thumbnailRequester = thumbnailRequester,
+            onFocusChanged = { buttonFocused = it },
+            onClick = onToggleWatched
+        )
+    }
+}
+
+@Composable
+private fun WatchedToggleButton(
+    isWatched: Boolean,
+    isFocused: Boolean,
+    focusRequester: FocusRequester,
+    thumbnailRequester: FocusRequester,
+    onFocusChanged: (Boolean) -> Unit,
+    onClick: () -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+
+    // Animate width: icon-only (32dp) → icon + text on focus
+    val targetWidth = if (isFocused) if (isWatched) 120.dp else 150.dp else 32.dp
+    val animatedWidth by animateDpAsState(
+        targetValue = targetWidth,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "watchedBtnWidth"
+    )
+
+    val bgColor = when {
+        isWatched && isFocused -> primary.copy(0.2f)
+        isWatched -> primary.copy(0.1f)
+        isFocused -> Color.White.copy(0.15f)
+        else -> Color.White.copy(0.08f)
+    }
+    val borderColor = when {
+        isFocused -> primary
+        isWatched -> primary.copy(0.4f)
+        else -> Color.White.copy(0.15f)
+    }
+    val iconColor = when {
+        isWatched -> primary
+        isFocused -> Color.White
+        else -> Color.White.copy(0.5f)
+    }
+
+    Row(
+        modifier = Modifier
+            .width(animatedWidth)
+            .height(32.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+            .focusRequester(focusRequester)
+            .focusProperties { left = thumbnailRequester; right = FocusRequester.Cancel }
+            .onFocusChanged { onFocusChanged(it.isFocused) }
+            .clickable(onClick = onClick)
+            .focusable()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text(
+            if (isWatched) "✓" else "+",
+            color = iconColor,
+            style = MaterialTheme.typography.titleSmall
+        )
+
+        if (isFocused) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                if (isWatched) "Watched" else "Mark watched",
+                color = if (isWatched) primary else Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1
+            )
         }
     }
 }

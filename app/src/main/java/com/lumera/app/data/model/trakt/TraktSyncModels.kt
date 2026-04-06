@@ -43,7 +43,17 @@ data class TraktSyncRequest(
 )
 
 data class TraktSyncItem(
-    val ids: TraktIds
+    val ids: TraktIds,
+    val seasons: List<TraktSyncSeason>? = null
+)
+
+data class TraktSyncSeason(
+    val number: Int,
+    val episodes: List<TraktSyncEpisode>
+)
+
+data class TraktSyncEpisode(
+    val number: Int
 )
 
 /**

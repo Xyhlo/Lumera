@@ -6,8 +6,10 @@ import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import com.lumera.app.data.model.trakt.TraktIds
 import com.lumera.app.data.model.trakt.TraktPlaybackItem
+import com.lumera.app.data.model.trakt.TraktSyncEpisode
 import com.lumera.app.data.model.trakt.TraktSyncItem
 import com.lumera.app.data.model.trakt.TraktSyncRequest
+import com.lumera.app.data.model.trakt.TraktSyncSeason
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
 import com.lumera.app.data.remote.TraktSyncApiService
 import kotlinx.coroutines.Dispatchers
@@ -204,6 +206,54 @@ class TraktSyncManager @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to push watchlist remove to Trakt", e)
+            }
+        }
+    }
+
+    // ── Watch History (mark as watched) ──
+
+    /**
+     * Mark an episode as watched on Trakt.
+     */
+    suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int) {
+        if (traktAuthManager.getAccessToken() == null) return
+        withContext(Dispatchers.IO) {
+            try {
+                val body = TraktSyncRequest(
+                    shows = listOf(
+                        TraktSyncItem(
+                            ids = TraktIds(imdb = showImdbId),
+                            seasons = listOf(TraktSyncSeason(season, listOf(TraktSyncEpisode(episode))))
+                        )
+                    )
+                )
+                val response = traktSyncApi.addToHistory(body)
+                Log.d(TAG, "pushEpisodeWatched S${season}E${episode}: ${response.code()}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to push episode watched to Trakt", e)
+            }
+        }
+    }
+
+    /**
+     * Remove an episode from watched history on Trakt.
+     */
+    suspend fun pushEpisodeUnwatched(showImdbId: String, season: Int, episode: Int) {
+        if (traktAuthManager.getAccessToken() == null) return
+        withContext(Dispatchers.IO) {
+            try {
+                val body = TraktSyncRequest(
+                    shows = listOf(
+                        TraktSyncItem(
+                            ids = TraktIds(imdb = showImdbId),
+                            seasons = listOf(TraktSyncSeason(season, listOf(TraktSyncEpisode(episode))))
+                        )
+                    )
+                )
+                val response = traktSyncApi.removeFromHistory(body)
+                Log.d(TAG, "pushEpisodeUnwatched S${season}E${episode}: ${response.code()}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to push episode unwatched to Trakt", e)
             }
         }
     }

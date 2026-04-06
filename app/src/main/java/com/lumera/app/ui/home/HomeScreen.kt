@@ -154,6 +154,9 @@ fun HomeScreen(
             }
         } else {
             // DATA IS READY: Show Content
+            val hasInProgressHistory = remember(state.history) {
+                state.history.any { !it.watched }
+            }
             if (layoutMode == "cinematic") {
                 CinematicLayout(
                     infoTopPadding = infoTopPadding,
@@ -173,10 +176,10 @@ fun HomeScreen(
                     lastFocusedKey = lastFocusedKey,
                     rowScrollPositions = rowScrollPositions,
                     verticalScrollPosition = verticalScrollPosition,
-                    historyScrollAdjustment = if (viewModel.needsHistoryScrollAdjustment(state.history.isNotEmpty())) 1 else 0,
+                    historyScrollAdjustment = if (viewModel.needsHistoryScrollAdjustment(hasInProgressHistory)) 1 else 0,
                     onFocusChange = { viewModel.setLastFocusedKey(it) },
                     onScrollPositionChange = { key, pos -> viewModel.setRowScrollPosition(key, pos) },
-                    onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, state.history.isNotEmpty()) },
+                    onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, hasInProgressHistory) },
                     onPreviewItemVisible = { viewModel.ensureMetadataFallback(it); viewModel.ensureTmdbEnrichment(it) },
                     isLandscapeContinueWatching = isLandscapeContinueWatching
                 )
@@ -206,12 +209,12 @@ fun HomeScreen(
                     rowScrollPositions = rowScrollPositions,
                     verticalScrollPosition = verticalScrollPosition,
                     historyScrollAdjustment = if (
-                        viewModel.needsHistoryScrollAdjustment(state.history.isNotEmpty()) &&
+                        viewModel.needsHistoryScrollAdjustment(hasInProgressHistory) &&
                         (heroItems.isEmpty() || verticalScrollPosition.first > 0)
                     ) 1 else 0,
                     onFocusChange = { viewModel.setLastFocusedKey(it) },
                     onScrollPositionChange = { key, pos -> viewModel.setRowScrollPosition(key, pos) },
-                    onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, state.history.isNotEmpty()) },
+                    onVerticalScrollChange = { viewModel.setVerticalScrollPosition(it, hasInProgressHistory) },
                     onHeroItemVisible = { viewModel.ensureMetadataFallback(it); viewModel.ensureTmdbEnrichment(it) },
                     isLandscapeContinueWatching = isLandscapeContinueWatching
                 )
@@ -300,7 +303,7 @@ fun CinematicLayout(
 
         // SMART FOCUS:
         // We are now safe to request focus because HomeScreen ensures we only reach here when data is ready.
-        if (!hasRequestedFocus && (state.history.isNotEmpty() || state.mixedRows.isNotEmpty())) {
+        if (!hasRequestedFocus && (historyItems.isNotEmpty() || state.mixedRows.isNotEmpty())) {
             delay(100)
             entryRequester.requestFocus()
             hasRequestedFocus = true
@@ -494,7 +497,7 @@ fun CinematicLayout(
                         contentPadding = PaddingValues(top = 5.dp, bottom = 400.dp),
                         verticalArrangement = Arrangement.spacedBy((-12).dp)
                     ) {
-                        if (state.history.isNotEmpty()) {
+                        if (historyItems.isNotEmpty()) {
                             item(key = "history_header", contentType = "row") {
                                 // Reset scroll position when focus was redirected (cleared item removed)
                                 val savedPosition = if (historyFocusRedirected) Pair(0, 0)
@@ -566,7 +569,7 @@ fun CinematicLayout(
                                     // Create list state with saved scroll position for this hub row
                                     // Reset when focus was redirected from a removed history item to this first row
                                     val hubKey = "hub_${item.id}"
-                                    val resetScroll = historyFocusRedirected && state.history.isEmpty() && index == 0
+                                    val resetScroll = historyFocusRedirected && historyItems.isEmpty() && index == 0
                                     val savedHubPosition = if (resetScroll) null else rowScrollPositions[hubKey]
                                     val hubListState = rememberLazyListState(
                                         initialFirstVisibleItemIndex = savedHubPosition?.first ?: 0,
@@ -597,7 +600,7 @@ fun CinematicLayout(
                                         upKeyDebouncer = upKeyDebouncer,
                                         repeatGate = dpadRepeatGate,
                                         isLastRow = index == state.mixedRows.lastIndex,
-                                        isFirstRow = state.history.isEmpty() && index == 0,
+                                        isFirstRow = historyItems.isEmpty() && index == 0,
                                         isGlobalFocusPresent = effectiveLastFocusedKey != null
                                     )
                                 }
@@ -605,7 +608,7 @@ fun CinematicLayout(
                                     // Create list state with saved scroll position for this row
                                     // Reset when focus was redirected from a removed history item to this first row
                                     val rowKey = item.id
-                                    val resetScroll = historyFocusRedirected && state.history.isEmpty() && index == 0
+                                    val resetScroll = historyFocusRedirected && historyItems.isEmpty() && index == 0
                                     val savedPosition = if (resetScroll) null else rowScrollPositions[rowKey]
 
                                     val initialIndex = savedPosition?.first ?: 0
@@ -657,7 +660,7 @@ fun CinematicLayout(
                                         drawerRequester = drawerRequester,
                                         locallyFocusedItemId = if (effectiveLastFocusedKey?.startsWith("${index}_") == true) effectiveLastFocusedKey else null,
                                         isGlobalFocusPresent = effectiveLastFocusedKey != null,
-                                        isFirstRow = state.history.isEmpty() && index == 0,
+                                        isFirstRow = historyItems.isEmpty() && index == 0,
                                         isInfiniteLoopEnabled = item.isInfiniteLoopEnabled,
                                         visibleItemCount = item.visibleItemCount,
                                         isInfiniteScrollingEnabled = item.isInfiniteScrollingEnabled,
@@ -1146,7 +1149,7 @@ fun SimpleLayout(
                             drawerRequester = drawerRequester,
                             locallyFocusedItemId = if (effectiveLastFocusedKey?.startsWith("${rowIndex}_") == true) effectiveLastFocusedKey else null,
                             isGlobalFocusPresent = effectiveLastFocusedKey != null,
-                            isFirstRow = heroItems.isEmpty() && state.history.isEmpty() && rowIndex == 0,
+                            isFirstRow = heroItems.isEmpty() && historyItems.isEmpty() && rowIndex == 0,
                             isInfiniteLoopEnabled = item.isInfiniteLoopEnabled,
                             visibleItemCount = item.visibleItemCount,
                             isInfiniteScrollingEnabled = item.isInfiniteScrollingEnabled,

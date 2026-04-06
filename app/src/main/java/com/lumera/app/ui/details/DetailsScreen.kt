@@ -763,6 +763,7 @@ fun DetailsScreen(
             state = sidebarState,
             episodeProgressMap = state.episodeProgressMap,
             episodeEnrichmentMap = state.episodeEnrichmentMap,
+            onToggleWatched = { episode -> viewModel.toggleEpisodeWatched(episode) },
             onDismiss = { viewModel.closeSidebar() },
             onBack = { viewModel.goBackInSidebar() },
             onEpisodeSelected = { episode ->

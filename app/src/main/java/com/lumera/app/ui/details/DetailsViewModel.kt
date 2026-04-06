@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.stremio.MetaItem
+import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
 import com.lumera.app.data.model.StreamQuality
 import com.lumera.app.data.player.PlaybackTrackSelectionStore
@@ -352,6 +353,51 @@ class DetailsViewModel @Inject constructor(
                 Log.w("DetailsViewModel", "TMDB enrichment failed: ${e.message}")
                 _state.value = _state.value.copy(tmdbLoading = false)
             }
+        }
+    }
+
+    // ── Mark episode watched/unwatched ──
+
+    fun toggleEpisodeWatched(episode: MetaVideo) {
+        val meta = _state.value.meta ?: return
+        val streamId = _state.value.resolvedId ?: meta.id
+        val key = "S${episode.season}:E${episode.episode}"
+        val currentProgress = _state.value.episodeProgressMap[key]
+        val isCurrentlyWatched = currentProgress?.watched ?: false
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (isCurrentlyWatched) {
+                // Unmark: remove watched entry from history
+                val playbackId = "$streamId:${episode.season}:${episode.episode}"
+                dao.deleteHistoryItem(playbackId)
+                // Also try with stream index variants
+                dao.getSeriesEpisodeHistory("$playbackId:%").forEach {
+                    dao.deleteHistoryItem(it.id)
+                }
+                traktSyncManager.pushEpisodeUnwatched(streamId, episode.season, episode.episode)
+            } else {
+                // Mark as watched: create a watched history entry
+                val playbackId = "$streamId:${episode.season}:${episode.episode}"
+                dao.upsertHistory(
+                    WatchHistoryEntity(
+                        id = playbackId,
+                        title = episode.title.takeIf { it.isNotBlank() && it != "Episode" }
+                            ?: "S${episode.season}:E${episode.episode} - ${meta.name}",
+                        poster = meta.poster,
+                        position = 0L,
+                        duration = 0L,
+                        lastWatched = System.currentTimeMillis(),
+                        type = "series",
+                        watched = true,
+                        scrobbled = true
+                    )
+                )
+                traktSyncManager.pushEpisodeWatched(streamId, episode.season, episode.episode)
+            }
+
+            // Refresh the progress map
+            val updatedMap = buildEpisodeProgressMap(streamId)
+            _state.value = _state.value.copy(episodeProgressMap = updatedMap)
         }
     }
 
