@@ -154,8 +154,8 @@ fun HomeScreen(
             }
         } else {
             // DATA IS READY: Show Content
-            val hasInProgressHistory = remember(state.history) {
-                state.history.any { !it.watched }
+            val hasInProgressHistory = remember(state.history, state.seriesNextUp) {
+                state.history.any { !it.watched } || state.seriesNextUp.any { !it.isComplete }
             }
             if (layoutMode == "cinematic") {
                 CinematicLayout(
@@ -253,8 +253,8 @@ fun CinematicLayout(
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
     // Cache the history items transformation to avoid allocating new list on every recomposition
-    val historyItems = remember(state.history) {
-        buildContinueWatchingItems(state.history)
+    val historyItems = remember(state.history, state.seriesNextUp) {
+        buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 
     // Proactive metadata fetch for landscape continue watching cards
@@ -738,12 +738,15 @@ private fun resolveCinematicPreviewItem(
     return row.items.firstOrNull { it.id == itemToken }
 }
 
-private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<MetaItem> {
-    if (history.isEmpty()) return emptyList()
+private fun buildContinueWatchingItems(
+    history: List<WatchHistoryEntity>,
+    seriesNextUp: List<com.lumera.app.data.model.SeriesNextUpEntity> = emptyList()
+): List<MetaItem> {
+    val result = mutableListOf<MetaItem>()
+    val seriesIdsIncluded = mutableSetOf<String>()
 
-    // Only show in-progress items, not fully watched ones
+    // 1. In-progress items (partially watched, not completed)
     val inProgress = history.filter { !it.watched }
-    if (inProgress.isEmpty()) return emptyList()
 
     val seriesByCanonicalId = mutableMapOf<String, MutableList<WatchHistoryEntity>>()
     val movieById = mutableMapOf<String, WatchHistoryEntity>()
@@ -765,12 +768,13 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
         }
     }
 
-    return inProgress.mapNotNull { entry ->
+    inProgress.forEach { entry ->
         if (entry.type == "series") {
             val canonicalId = canonicalSeriesId(entry.id)
-            val chosen = chosenSeries[canonicalId] ?: return@mapNotNull null
-            if (chosen.id != entry.id) return@mapNotNull null
-            MetaItem(
+            val chosen = chosenSeries[canonicalId] ?: return@forEach
+            if (chosen.id != entry.id) return@forEach
+            seriesIdsIncluded.add(canonicalId)
+            result.add(MetaItem(
                 id = canonicalId,
                 type = entry.type,
                 name = entry.title,
@@ -778,11 +782,11 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
                 background = chosen.background,
                 logo = chosen.logo,
                 progress = chosen.progress()
-            )
+            ))
         } else {
-            val chosen = movieById[entry.id] ?: return@mapNotNull null
-            if (chosen.id != entry.id) return@mapNotNull null
-            MetaItem(
+            val chosen = movieById[entry.id] ?: return@forEach
+            if (chosen.id != entry.id) return@forEach
+            result.add(MetaItem(
                 id = entry.id,
                 type = entry.type,
                 name = entry.title,
@@ -790,9 +794,30 @@ private fun buildContinueWatchingItems(history: List<WatchHistoryEntity>): List<
                 background = entry.background,
                 logo = entry.logo,
                 progress = entry.progress()
-            )
+            ))
         }
     }
+
+    // 2. Next-up entries: series where all in-progress episodes are watched,
+    //    but there's a next episode available. Only include if the episode has aired.
+    val today = java.time.LocalDate.now().toString() // "2026-04-06"
+    for (nextUp in seriesNextUp) {
+        if (nextUp.seriesId in seriesIdsIncluded) continue // already shown as in-progress
+        if (nextUp.isComplete) continue
+
+        // Check if the next episode has aired
+        val released = nextUp.nextReleased
+        if (released != null && released > today) continue // not yet aired
+
+        result.add(MetaItem(
+            id = nextUp.seriesId,
+            type = "series",
+            name = nextUp.title,
+            poster = nextUp.poster
+        ))
+    }
+
+    return result
 }
 
 private fun canonicalSeriesId(playbackId: String): String {
@@ -859,8 +884,8 @@ fun SimpleLayout(
     isLandscapeContinueWatching: Boolean = false
 ) {
     var hasRequestedFocus by remember { mutableStateOf(false) }
-    val historyItems = remember(state.history) {
-        buildContinueWatchingItems(state.history)
+    val historyItems = remember(state.history, state.seriesNextUp) {
+        buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 
     // Proactive metadata fetch for landscape continue watching cards

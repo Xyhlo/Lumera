@@ -48,6 +48,7 @@ class HomeViewModel @Inject constructor(
         val rows: List<HomeRow> = emptyList(),
         val hubRows: List<HubGroupRow> = emptyList(),
         val history: List<WatchHistoryEntity> = emptyList(),
+        val seriesNextUp: List<com.lumera.app.data.model.SeriesNextUpEntity> = emptyList(),
         val isLoading: Boolean = true,
         val lastFocusedKey: String? = null,
         val loadedScreen: String? = null,
@@ -545,15 +546,20 @@ class HomeViewModel @Inject constructor(
             hadHistoryWhenPositionSaved = false
             isRestoringPosition = false
 
-            // Load History only for Home
+            // Load History + Series Next Up only for Home
             if (screenName == "home") {
                 launch {
                     dao.getWatchHistory().collect {
                         _state.value = _state.value.copy(history = it)
                     }
                 }
+                launch {
+                    dao.getActiveSeriesNextUp().collect {
+                        _state.value = _state.value.copy(seriesNextUp = it)
+                    }
+                }
             } else {
-                _state.value = _state.value.copy(history = emptyList())
+                _state.value = _state.value.copy(history = emptyList(), seriesNextUp = emptyList())
             }
 
             try {

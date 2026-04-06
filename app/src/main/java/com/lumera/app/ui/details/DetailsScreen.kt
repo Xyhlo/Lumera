@@ -142,6 +142,7 @@ fun DetailsScreen(
     val textColor = MaterialTheme.colorScheme.onBackground
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    var showClearProgressDialog by remember { mutableStateOf(false) }
     var pendingPlaybackId by remember(type, id) { mutableStateOf(id) }
     var pendingPlaybackType by remember(type, id) { mutableStateOf(type) }
     var pendingPlaybackTitle by remember(type, id) { mutableStateOf("") }
@@ -151,7 +152,6 @@ fun DetailsScreen(
 
     LaunchedEffect(autoPlayStream) {
         val stream = autoPlayStream ?: return@LaunchedEffect
-        viewModel.commitClearProgress()
         val urlToPlay = resolvePlayableUrl(stream)
         if (!urlToPlay.isNullOrEmpty()) {
             val playbackId = pendingPlaybackId.ifBlank { movie?.id ?: id }
@@ -182,7 +182,6 @@ fun DetailsScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.commitClearProgress()
         }
     }
 
@@ -447,8 +446,7 @@ fun DetailsScreen(
                         else -> resumePlaybackHint?.takeIf { it == id }
                     }
                 }
-                val resumePlaybackId = if (state.progressCleared) null
-                    else hintedResumePlaybackId ?: state.resumePlaybackId
+                val resumePlaybackId = hintedResumePlaybackId ?: state.resumePlaybackId
                 val resumeEpisode = remember(currentMovie.id, currentMovie.videos, resumePlaybackId) {
                     if (type == "series") {
                         resolveEpisodeForPlaybackId(currentMovie.id, currentMovie.videos, resumePlaybackId)
@@ -528,17 +526,11 @@ fun DetailsScreen(
                             onClick = { viewModel.toggleWatchlist() }
                         )
 
-                        if (resumePlaybackId != null || state.progressCleared) {
+                        if (resumePlaybackId != null) {
                             ExpandableIconButton(
-                                label = if (state.progressCleared) "Undo" else "Clear Progress",
-                                icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
-                                onClick = {
-                                    if (state.progressCleared) {
-                                        viewModel.undoClearProgress()
-                                    } else {
-                                        viewModel.clearProgress()
-                                    }
-                                }
+                                label = "Clear Progress",
+                                icon = Icons.Default.Close,
+                                onClick = { showClearProgressDialog = true }
                             )
                         }
                     }
@@ -571,23 +563,17 @@ fun DetailsScreen(
                             onClick = { viewModel.toggleWatchlist() }
                         )
 
-                        if (resumePlaybackId != null || state.progressCleared) {
+                        if (resumePlaybackId != null) {
                             ExpandableIconButton(
-                                label = if (state.progressCleared) "Undo" else "Clear Progress",
-                                icon = if (state.progressCleared) Icons.Default.Refresh else Icons.Default.Close,
-                                onClick = {
-                                    if (state.progressCleared) {
-                                        viewModel.undoClearProgress()
-                                    } else {
-                                        viewModel.clearProgress()
-                                    }
-                                }
+                                label = "Clear Progress",
+                                icon = Icons.Default.Close,
+                                onClick = { showClearProgressDialog = true }
                             )
                         }
 
                         // Works around a Compose focus-tree bug where requestFocus()
                         // silently fails when a container has a single focusable child.
-                        if (resumePlaybackId == null && !state.progressCleared && !isInWatchlist) {
+                        if (resumePlaybackId == null && !isInWatchlist) {
                             Spacer(modifier = Modifier
                                 .size(0.dp)
                                 .onFocusChanged {
@@ -804,6 +790,66 @@ fun DetailsScreen(
                 CircularProgressIndicator(color = accentColor)
             }
         }
+
+        // Clear progress confirmation dialog
+        if (showClearProgressDialog) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { showClearProgressDialog = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 400.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(bg)
+                            .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Clear Progress",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = textColor
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "This will remove all watch progress for this title, including on Trakt. This action cannot be undone.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textColor.copy(0.7f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                        ) {
+                            val cancelFocusRequester = remember { FocusRequester() }
+
+                            DialogButton(
+                                text = "Cancel",
+                                modifier = Modifier.width(120.dp).focusRequester(cancelFocusRequester),
+                                onClick = { showClearProgressDialog = false }
+                            )
+                            DialogButton(
+                                text = "Clear",
+                                isDestructive = true,
+                                modifier = Modifier.width(120.dp),
+                                onClick = {
+                                    showClearProgressDialog = false
+                                    viewModel.confirmClearProgress()
+                                }
+                            )
+
+                            LaunchedEffect(Unit) {
+                                kotlinx.coroutines.delay(200)
+                                runCatching { cancelFocusRequester.requestFocus() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -922,6 +968,45 @@ private fun ExpandableIconButton(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun DialogButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isDestructive: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "dlgBtnScale")
+    val activeColor = if (isDestructive) Color.Red else MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = modifier
+            .height(50.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(0.08f))
+            .border(
+                1.dp,
+                if (isFocused) activeColor else if (isDestructive) activeColor.copy(0.75f) else Color.White.copy(0.2f),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text.uppercase(),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = when {
+                isFocused -> activeColor
+                isDestructive -> activeColor.copy(0.95f)
+                else -> Color.White
+            }
+        )
     }
 }
 

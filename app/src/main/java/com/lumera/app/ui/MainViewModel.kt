@@ -71,6 +71,7 @@ class MainViewModel @Inject constructor(
             // Immediate full sync on login
             traktSyncManager.syncWatchlist()
             traktSyncManager.syncPlaybackProgress()
+            traktSyncManager.syncSeriesNextUp()
 
             // Then lightweight activity check every 30 seconds —
             // only triggers a full sync when Trakt detects changes

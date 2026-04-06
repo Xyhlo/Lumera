@@ -2,6 +2,7 @@ package com.lumera.app.data.trakt
 
 import android.util.Log
 import com.lumera.app.data.local.AddonDao
+import com.lumera.app.data.model.SeriesNextUpEntity
 import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import com.lumera.app.data.model.trakt.TraktIds
@@ -35,6 +36,7 @@ class TraktSyncManager @Inject constructor(
     // Last known activity timestamps from Trakt (Fix #4/#10: volatile for thread safety)
     @Volatile private var lastWatchlistActivity: String? = null
     @Volatile private var lastPlaybackActivity: String? = null
+    @Volatile private var lastWatchedActivity: String? = null
 
     // IDs currently being deleted from Trakt — sync skips these to prevent race conditions (Fix 5)
     // Fix #2: Thread-safe set for concurrent access from sync poll and delete operations
@@ -75,6 +77,15 @@ class TraktSyncManager @Inject constructor(
                     Log.d(TAG, "Playback activity changed: $lastPlaybackActivity → $playbackTimestamp")
                     lastPlaybackActivity = playbackTimestamp
                     syncPlaybackProgress()
+                    synced = true
+                }
+
+                // Check watched history changes (episodes marked as watched → update next-up)
+                val episodesWatched = activities.episodes?.watchedAt
+                if (episodesWatched != null && episodesWatched != lastWatchedActivity) {
+                    Log.d(TAG, "Watched activity changed: $lastWatchedActivity → $episodesWatched")
+                    lastWatchedActivity = episodesWatched
+                    syncSeriesNextUp()
                     synced = true
                 }
 
@@ -409,6 +420,98 @@ class TraktSyncManager @Inject constructor(
         }
     }
 
+    /**
+     * Sync series next-up entries from Trakt.
+     * For each watched show on Trakt, fetches the show's watched progress
+     * to get the next episode, and updates the local series_next_up table.
+     */
+    suspend fun syncSeriesNextUp() {
+        withContext(Dispatchers.IO) {
+            try {
+                // Get all watched shows from Trakt
+                val showsResponse = traktSyncApi.getWatchedShows()
+                if (!showsResponse.isSuccessful) {
+                    Log.w(TAG, "Failed to fetch watched shows for next-up: ${showsResponse.code()}")
+                    return@withContext
+                }
+                val watchedShows = showsResponse.body() ?: return@withContext
+
+                var updated = 0
+                for (show in watchedShows) {
+                    val imdbId = show.show.ids.imdb ?: continue
+                    val traktSlug = show.show.ids.slug ?: continue
+                    val showTitle = show.show.title ?: "Unknown"
+
+                    // Create watched history entries for episodes marked watched on Trakt
+                    // so the episode sidebar shows checkmarks
+                    show.seasons?.forEach { season ->
+                        season.episodes?.forEach { ep ->
+                            val playbackId = "$imdbId:${season.number}:${ep.number}"
+                            val existing = dao.getHistoryItem(playbackId)
+                            if (existing == null) {
+                                dao.upsertHistory(
+                                    WatchHistoryEntity(
+                                        id = playbackId,
+                                        title = "S${season.number}:E${ep.number} - $showTitle",
+                                        poster = null,
+                                        position = 0L,
+                                        duration = 0L,
+                                        lastWatched = System.currentTimeMillis(),
+                                        type = "series",
+                                        watched = true,
+                                        scrobbled = true
+                                    )
+                                )
+                            } else if (!existing.watched) {
+                                dao.upsertHistory(existing.copy(watched = true))
+                            }
+                        }
+                    }
+
+                    try {
+                        val progressResponse = traktSyncApi.getShowProgress(traktSlug)
+                        if (!progressResponse.isSuccessful) continue
+                        val progress = progressResponse.body() ?: continue
+
+                        val nextEp = progress.nextEpisode
+                        if (nextEp != null) {
+                            // Parse air date from ISO 8601
+                            val airDate = nextEp.firstAired?.take(10) // "2025-07-10T00:00:00.000Z" → "2025-07-10"
+
+                            dao.upsertSeriesNextUp(
+                                SeriesNextUpEntity(
+                                    seriesId = imdbId,
+                                    title = show.show.title ?: "Unknown",
+                                    poster = null, // Will be resolved lazily
+                                    nextSeason = nextEp.season,
+                                    nextEpisode = nextEp.number,
+                                    nextEpisodeTitle = nextEp.title,
+                                    nextReleased = airDate,
+                                    isComplete = false,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            )
+                            updated++
+                        } else {
+                            // No next episode — show is complete
+                            val existing = dao.getSeriesNextUp(imdbId)
+                            if (existing != null && !existing.isComplete) {
+                                dao.upsertSeriesNextUp(existing.copy(isComplete = true, updatedAt = System.currentTimeMillis()))
+                                updated++
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to fetch progress for $traktSlug", e)
+                    }
+                }
+
+                Log.i(TAG, "Series next-up sync: updated $updated shows")
+            } catch (e: Exception) {
+                Log.e(TAG, "Series next-up sync failed", e)
+            }
+        }
+    }
+
     /** Mark IDs as pending deletion so the sync poll doesn't re-add them. */
     fun markPendingDelete(ids: List<String>) {
         for (id in ids) {
@@ -429,6 +532,7 @@ class TraktSyncManager @Inject constructor(
     fun resetActivityState() {
         lastWatchlistActivity = null
         lastPlaybackActivity = null
+        lastWatchedActivity = null
     }
 
     // ── Internal ──

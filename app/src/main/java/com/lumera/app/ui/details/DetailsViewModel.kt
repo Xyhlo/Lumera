@@ -23,6 +23,7 @@ import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.data.trakt.TraktSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.lumera.app.data.model.SeriesNextUpEntity
 import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import kotlinx.coroutines.flow.firstOrNull
@@ -73,7 +74,6 @@ class DetailsViewModel @Inject constructor(
         val addonSubtitles: List<AddonSubtitle> = emptyList(),
         val availableStreams: List<Stream> = emptyList(),
         val sidebarState: SidebarState = SidebarState.Closed,
-        val progressCleared: Boolean = false,
         val episodeProgressMap: Map<String, EpisodeProgress> = emptyMap(), // "S1:E3" → progress
         val episodeEnrichmentMap: Map<String, TmdbEpisodeEnrichment> = emptyMap(), // "S1:E3" → TMDB data
         // TMDB enrichment
@@ -102,9 +102,6 @@ class DetailsViewModel @Inject constructor(
     private var loadRequestVersion: Long = 0L
     private var loadedContentKey: String? = null
 
-    // Stash for undo: holds deleted history entries until the user leaves the screen
-    private var clearedHistoryStash: List<WatchHistoryEntity> = emptyList()
-    private var clearedResumeId: String? = null
 
     fun loadDetails(type: String, id: String, addonBaseUrl: String? = null) {
         val requestKey = "$type:$id"
@@ -154,7 +151,16 @@ class DetailsViewModel @Inject constructor(
                 // Use resolved ID for streams — guarantees IMDb format for stream addons
                 val streamFetchId = if (details.id.startsWith("tt")) details.id else resolvedId
                 val resumePlaybackId = if (details.type == "series") {
-                    dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%")?.id
+                    val latest = dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%")
+                    if (latest != null && !latest.watched) {
+                        latest.id // In-progress episode — resume it
+                    } else {
+                        // All episodes watched or no history — use next-up
+                        val nextUp = dao.getSeriesNextUp(streamFetchId)
+                        if (nextUp != null && !nextUp.isComplete) {
+                            "${streamFetchId}:${nextUp.nextSeason}:${nextUp.nextEpisode}"
+                        } else null
+                    }
                 } else {
                     dao.getHistoryItem(streamFetchId)?.id
                 }
@@ -179,6 +185,10 @@ class DetailsViewModel @Inject constructor(
                     tmdbCollection = emptyList(),
                     tmdbCollectionName = null
                 )
+                // Update next-up entry when details load
+                if (details.type == "series") {
+                    computeAndStoreNextUp(streamFetchId, details.name, details.poster, details.videos)
+                }
                 // Fire TMDB enrichment in background (non-blocking)
                 loadTmdbEnrichment(details.type, streamFetchId, requestKey)
             } catch (ce: CancellationException) {
@@ -208,7 +218,15 @@ class DetailsViewModel @Inject constructor(
 
         viewModelScope.launch {
             val resumePlaybackId = if (meta.type == "series") {
-                dao.getLatestSeriesEpisodeHistory("${meta.id}:%")?.id
+                val latest = dao.getLatestSeriesEpisodeHistory("${meta.id}:%")
+                if (latest != null && !latest.watched) {
+                    latest.id
+                } else {
+                    val nextUp = dao.getSeriesNextUp(meta.id)
+                    if (nextUp != null && !nextUp.isComplete) {
+                        "${meta.id}:${nextUp.nextSeason}:${nextUp.nextEpisode}"
+                    } else null
+                }
             } else {
                 dao.getHistoryItem(meta.id)?.id
             }
@@ -221,6 +239,10 @@ class DetailsViewModel @Inject constructor(
                     autoPlayStream = null,
                     episodeProgressMap = episodeProgressMap
                 )
+                // Update next-up after returning from player
+                if (meta.type == "series") {
+                    computeAndStoreNextUp(meta.id, meta.name, meta.poster, meta.videos)
+                }
             }
         }
     }
@@ -257,6 +279,68 @@ class DetailsViewModel @Inject constructor(
             }
         }
         return map
+    }
+
+    /**
+     * Compute and store the next unwatched episode for a series.
+     * Called when an episode is watched (auto or manual) and when details load.
+     */
+    suspend fun computeAndStoreNextUp(
+        seriesId: String,
+        title: String,
+        poster: String?,
+        videos: List<MetaVideo>?
+    ) {
+        if (videos.isNullOrEmpty()) return
+
+        // Get all watched episodes for this series
+        val progressMap = buildEpisodeProgressMap(seriesId)
+
+        // Sort episodes by season then episode number
+        val sortedEpisodes = videos
+            .filter { it.season > 0 && it.episode > 0 }
+            .sortedWith(compareBy({ it.season }, { it.episode }))
+
+        if (sortedEpisodes.isEmpty()) return
+
+        // Find the first unwatched episode
+        val nextEpisode = sortedEpisodes.firstOrNull { ep ->
+            val key = "S${ep.season}:E${ep.episode}"
+            progressMap[key]?.watched != true
+        }
+
+        if (nextEpisode != null) {
+            // There's a next episode to watch
+            val epTitle = nextEpisode.title.takeIf { it.isNotBlank() && it != "Episode" }
+            dao.upsertSeriesNextUp(
+                SeriesNextUpEntity(
+                    seriesId = seriesId,
+                    title = title,
+                    poster = poster,
+                    nextSeason = nextEpisode.season,
+                    nextEpisode = nextEpisode.episode,
+                    nextEpisodeTitle = epTitle,
+                    nextReleased = nextEpisode.released?.take(10),
+                    isComplete = false,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        } else {
+            // All episodes watched — mark as complete
+            dao.upsertSeriesNextUp(
+                SeriesNextUpEntity(
+                    seriesId = seriesId,
+                    title = title,
+                    poster = poster,
+                    nextSeason = 0,
+                    nextEpisode = 0,
+                    nextEpisodeTitle = null,
+                    nextReleased = null,
+                    isComplete = true,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     private fun loadTmdbEnrichment(type: String, videoId: String, contentKey: String) {
@@ -395,9 +479,10 @@ class DetailsViewModel @Inject constructor(
                 traktSyncManager.pushEpisodeWatched(streamId, episode.season, episode.episode)
             }
 
-            // Refresh the progress map
+            // Refresh the progress map and next-up entry
             val updatedMap = buildEpisodeProgressMap(streamId)
             _state.value = _state.value.copy(episodeProgressMap = updatedMap)
+            computeAndStoreNextUp(streamId, meta.name, meta.poster, meta.videos)
         }
     }
 
@@ -518,28 +603,23 @@ class DetailsViewModel @Inject constructor(
         _state.value = _state.value.copy(autoPlayStream = null)
     }
 
-    // --- Clear Progress (with undo) ---
+    // --- Clear Progress (with confirmation dialog) ---
 
-    fun clearProgress() {
+    fun confirmClearProgress() {
         val meta = _state.value.meta ?: return
-        val currentResumeId = _state.value.resumePlaybackId ?: return
-        clearedResumeId = currentResumeId
 
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            clearedHistoryStash = if (meta.type == "series") {
+            // Collect items to clear
+            val historyItems = if (meta.type == "series") {
                 dao.getSeriesEpisodeHistory("${meta.id}:%")
             } else {
                 listOfNotNull(dao.getHistoryItem(meta.id))
             }
 
-            // Mark scrobbled items as pending delete so the sync poll doesn't re-add them
-            val scrobbledIds = clearedHistoryStash.filter { it.scrobbled }.map { it.id }
-            if (scrobbledIds.isNotEmpty()) {
-                traktSyncManager.markPendingDelete(scrobbledIds)
-            }
-
+            // Delete from local DB
             if (meta.type == "series") {
                 dao.deleteSeriesHistory("${meta.id}:%")
+                dao.deleteSeriesNextUp(meta.id)
                 sourceSelectionStore.clearSelectionsForPrefix(meta.id)
                 playbackTrackSelectionStore.clearSelectionsForPrefix(meta.id)
             } else {
@@ -548,56 +628,37 @@ class DetailsViewModel @Inject constructor(
                 playbackTrackSelectionStore.clearSelection(meta.id)
             }
 
-            profileConfigurationManager.saveActiveRuntimeState()
-
-            _state.value = _state.value.copy(
-                resumePlaybackId = null,
-                progressCleared = true
-            )
-        }
-    }
-
-    fun undoClearProgress() {
-        if (clearedHistoryStash.isEmpty()) return
-        val stash = clearedHistoryStash
-        val resumeId = clearedResumeId
-
-        // Unmark from pending deletes so sync poll can see them again
-        val scrobbledIds = stash.filter { it.scrobbled }.map { it.id }
-        if (scrobbledIds.isNotEmpty()) {
-            traktSyncManager.unmarkPendingDelete(scrobbledIds)
-        }
-
-        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            dao.upsertHistoryItems(stash)
-            profileConfigurationManager.saveActiveRuntimeState()
-            clearedHistoryStash = emptyList()
-            clearedResumeId = null
-
-            _state.value = _state.value.copy(
-                resumePlaybackId = resumeId,
-                progressCleared = false
-            )
-        }
-    }
-
-    /** Drop the undo stash so progress deletion becomes permanent. (Fix 4: Trakt deletion deferred to here) */
-    fun commitClearProgress() {
-        val stash = clearedHistoryStash
-        clearedHistoryStash = emptyList()
-        clearedResumeId = null
-        if (_state.value.progressCleared) {
-            _state.value = _state.value.copy(progressCleared = false)
-        }
-        // Now that the user can no longer undo, delete from Trakt
-        if (stash.any { it.scrobbled }) {
-            viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-                for (item in stash) {
-                    if (item.scrobbled) {
-                        traktSyncManager.deletePlaybackFromTrakt(item.id)
+            // Delete from Trakt (playback progress + watched history)
+            for (item in historyItems) {
+                if (item.scrobbled) {
+                    traktSyncManager.deletePlaybackFromTrakt(item.id)
+                }
+            }
+            // Remove watched episodes from Trakt history for series
+            if (meta.type == "series") {
+                val streamId = _state.value.resolvedId ?: meta.id
+                val watchedEpisodes = historyItems.filter { it.watched }
+                for (ep in watchedEpisodes) {
+                    val parts = ep.id.split(":")
+                    if (parts.size >= 3) {
+                        val hasStreamIdx = parts.size >= 4 && parts.last().toIntOrNull() != null
+                        val season = parts[parts.size - if (hasStreamIdx) 3 else 2].toIntOrNull() ?: continue
+                        val episode = parts[parts.size - if (hasStreamIdx) 2 else 1].toIntOrNull() ?: continue
+                        traktSyncManager.pushEpisodeUnwatched(streamId, season, episode)
                     }
                 }
             }
+
+            profileConfigurationManager.saveActiveRuntimeState()
+
+            // Refresh episode progress map
+            val streamId = _state.value.resolvedId ?: meta.id
+            val updatedMap = if (meta.type == "series") buildEpisodeProgressMap(streamId) else emptyMap()
+
+            _state.value = _state.value.copy(
+                resumePlaybackId = null,
+                episodeProgressMap = updatedMap
+            )
         }
     }
 

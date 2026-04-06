@@ -98,6 +98,23 @@ data class TraktActivityTimestamps(
 )
 
 /**
+ * Response from GET /shows/{id}/progress/watched
+ */
+data class TraktShowProgress(
+    val aired: Int?,
+    val completed: Int?,
+    @SerializedName("next_episode") val nextEpisode: TraktProgressEpisode?
+)
+
+data class TraktProgressEpisode(
+    val season: Int,
+    val number: Int,
+    val title: String?,
+    val ids: TraktIds? = null,
+    @SerializedName("first_aired") val firstAired: String? = null
+)
+
+/**
  * Response from GET /sync/playback — items the user is currently watching.
  */
 data class TraktPlaybackItem(

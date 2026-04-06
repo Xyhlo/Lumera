@@ -13,6 +13,7 @@ import com.lumera.app.data.model.HubRowWithItems
 import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.ThemeEntity
+import com.lumera.app.data.model.SeriesNextUpEntity
 import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import kotlinx.coroutines.flow.Flow
@@ -217,6 +218,20 @@ interface AddonDao {
 
     @Query("SELECT * FROM watch_history WHERE scrobbled = 1 AND watched = 0")
     suspend fun getScrobbledInProgressItems(): List<WatchHistoryEntity>
+
+    // ── Series Next Up ──
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSeriesNextUp(entry: SeriesNextUpEntity)
+
+    @Query("SELECT * FROM series_next_up WHERE isComplete = 0 ORDER BY updatedAt DESC")
+    fun getActiveSeriesNextUp(): Flow<List<SeriesNextUpEntity>>
+
+    @Query("SELECT * FROM series_next_up WHERE seriesId = :seriesId")
+    suspend fun getSeriesNextUp(seriesId: String): SeriesNextUpEntity?
+
+    @Query("DELETE FROM series_next_up WHERE seriesId = :seriesId")
+    suspend fun deleteSeriesNextUp(seriesId: String)
 
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
     suspend fun isInWatchlist(id: String): Boolean

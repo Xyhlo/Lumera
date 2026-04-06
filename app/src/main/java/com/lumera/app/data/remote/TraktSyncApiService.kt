@@ -2,6 +2,7 @@ package com.lumera.app.data.remote
 
 import com.lumera.app.data.model.trakt.TraktLastActivities
 import com.lumera.app.data.model.trakt.TraktPlaybackItem
+import com.lumera.app.data.model.trakt.TraktShowProgress
 import com.lumera.app.data.model.trakt.TraktScrobbleRequest
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktSyncResponse
@@ -58,6 +59,11 @@ interface TraktSyncApiService {
 
     @GET("sync/watched/shows")
     suspend fun getWatchedShows(): Response<List<TraktWatchedShow>>
+
+    @GET("shows/{id}/progress/watched")
+    suspend fun getShowProgress(
+        @Path("id") showId: String
+    ): Response<TraktShowProgress>
 
     @POST("sync/history")
     suspend fun addToHistory(
