@@ -822,7 +822,7 @@ fun DetailsScreen(
                         Spacer(Modifier.height(20.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
                         ) {
                             val cancelFocusRequester = remember { FocusRequester() }
 
