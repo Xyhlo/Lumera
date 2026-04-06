@@ -424,6 +424,12 @@ class DetailsViewModel @Inject constructor(
                 listOfNotNull(dao.getHistoryItem(meta.id))
             }
 
+            // Mark scrobbled items as pending delete so the sync poll doesn't re-add them
+            val scrobbledIds = clearedHistoryStash.filter { it.scrobbled }.map { it.id }
+            if (scrobbledIds.isNotEmpty()) {
+                traktSyncManager.markPendingDelete(scrobbledIds)
+            }
+
             if (meta.type == "series") {
                 dao.deleteSeriesHistory("${meta.id}:%")
                 sourceSelectionStore.clearSelectionsForPrefix(meta.id)
@@ -447,6 +453,12 @@ class DetailsViewModel @Inject constructor(
         if (clearedHistoryStash.isEmpty()) return
         val stash = clearedHistoryStash
         val resumeId = clearedResumeId
+
+        // Unmark from pending deletes so sync poll can see them again
+        val scrobbledIds = stash.filter { it.scrobbled }.map { it.id }
+        if (scrobbledIds.isNotEmpty()) {
+            traktSyncManager.unmarkPendingDelete(scrobbledIds)
+        }
 
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             dao.upsertHistoryItems(stash)

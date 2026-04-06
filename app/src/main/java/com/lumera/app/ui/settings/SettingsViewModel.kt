@@ -133,13 +133,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updateWatchedThreshold(profileId: Int, percent: Int) {
-        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            val profile = dao.getProfileById(profileId)
-            if (profile != null) dao.insertProfile(profile.copy(watchedThreshold = percent))
-        }
-    }
-
     fun updatePreferredAudioLanguage(profileId: Int, language: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val profile = dao.getProfileById(profileId)

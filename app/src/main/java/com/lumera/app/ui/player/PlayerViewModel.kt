@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
-import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.trakt.TraktScrobbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -13,10 +12,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+private const val WATCHED_THRESHOLD = 0.90 // 90% — matches ARVIO, above Trakt's 80% minimum
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val dao: AddonDao,
-    private val profileConfigurationManager: ProfileConfigurationManager,
     private val traktScrobbleManager: TraktScrobbleManager
 ) : ViewModel() {
 
@@ -40,10 +40,7 @@ class PlayerViewModel @Inject constructor(
             val remaining = safeDuration - safePosition
             val completionRatio = if (safeDuration > 0L) safePosition.toDouble() / safeDuration.toDouble() else 0.0
 
-            // Read configurable threshold from active profile (default 85%)
-            val profileId = profileConfigurationManager.getLastActiveProfileId()
-            val threshold = profileId?.let { dao.getProfileById(it) }?.watchedThreshold ?: 85
-            val isCompleted = completionRatio >= (threshold / 100.0) || remaining <= 30_000L
+            val isCompleted = completionRatio >= WATCHED_THRESHOLD || remaining <= 30_000L
 
             val entry = WatchHistoryEntity(
                 id = id,

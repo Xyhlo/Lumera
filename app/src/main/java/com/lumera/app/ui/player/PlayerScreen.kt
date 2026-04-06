@@ -215,10 +215,9 @@ fun PlayerScreen(
             0.0
         }
 
-        // Trakt: pause keeps item in continue watching, stop marks as watched (Fix 3: use profile threshold)
+        // Trakt: pause keeps item in continue watching, stop marks as watched
         if (!hasError && duration != null && duration > 0L) {
-            val scrobbleThreshold = playbackSettings.watchedThreshold / 100.0
-            if (completionRatio >= scrobbleThreshold || remaining <= 30_000L) {
+            if (completionRatio >= 0.90 || remaining <= 30_000L) {
                 viewModel.scrobbleStop(movieId, mediaType, position, duration)
             } else {
                 viewModel.scrobblePause(movieId, mediaType, position, duration, force = true)
