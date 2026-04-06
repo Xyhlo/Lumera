@@ -296,6 +296,13 @@ class DetailsViewModel @Inject constructor(
         // Get all watched episodes for this series
         val progressMap = buildEpisodeProgressMap(seriesId)
 
+        // If no episodes have been watched, remove the next-up entry entirely
+        val hasAnyWatched = progressMap.values.any { it.watched }
+        if (!hasAnyWatched) {
+            dao.deleteSeriesNextUp(seriesId)
+            return
+        }
+
         // Sort episodes by season then episode number
         val sortedEpisodes = videos
             .filter { it.season > 0 && it.episode > 0 }

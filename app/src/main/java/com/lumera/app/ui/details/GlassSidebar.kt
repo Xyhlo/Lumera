@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
@@ -280,6 +282,7 @@ fun EpisodesContent(
                         enrichment = epEnrichment,
                         onToggleWatched = { onToggleWatched(ep) },
                         thumbnailModifier = mod,
+                        listState = listState,
                         onClick = { onEpisodeClick(ep, selectedSeason, index) }
                     )
                 }
@@ -500,15 +503,26 @@ fun EpisodeItem(
     enrichment: TmdbEpisodeEnrichment? = null,
     onToggleWatched: () -> Unit = {},
     thumbnailModifier: Modifier = Modifier,
+    listState: LazyListState? = null,
     onClick: () -> Unit
 ) {
-    var rowFocused by remember { mutableStateOf(false) }
     var thumbnailFocused by remember { mutableStateOf(false) }
     var buttonFocused by remember { mutableStateOf(false) }
     val isFocused = thumbnailFocused || buttonFocused
     val primary = MaterialTheme.colorScheme.primary
     val thumbnailRequester = remember { FocusRequester() }
     val buttonRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+
+    // Counteract BringIntoView scroll when the mark button gets focus
+    LaunchedEffect(buttonFocused) {
+        if (buttonFocused && listState != null) {
+            val savedIndex = listState.firstVisibleItemIndex
+            val savedOffset = listState.firstVisibleItemScrollOffset
+            delay(50) // Wait for BringIntoView to execute
+            listState.scrollToItem(savedIndex, savedOffset) // Scroll back
+        }
+    }
 
     // Use TMDB data when available, fall back to addon data
     val title = enrichment?.title
@@ -524,11 +538,10 @@ fun EpisodeItem(
     Row(
         Modifier
             .fillMaxWidth()
-            .onFocusChanged { rowFocused = it.hasFocus }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // Thumbnail with progress bar overlay and S:E label
+        // Thumbnail
         Box(
             thumbnailModifier
                 .width(200.dp)
@@ -555,14 +568,9 @@ fun EpisodeItem(
                 Box(Modifier.fillMaxSize().background(Color.White.copy(0.08f)))
             }
 
-            // Watched overlay
+            // Darken thumbnail for watched episodes
             if (isWatched) {
-                Box(
-                    Modifier.fillMaxSize().background(Color.Black.copy(0.5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("✓", color = primary, style = MaterialTheme.typography.headlineMedium)
-                }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f)))
             }
 
             // S:E label at bottom-left
@@ -604,73 +612,75 @@ fun EpisodeItem(
 
         Spacer(Modifier.width(14.dp))
 
-        // Episode info (right side of thumbnail)
-        Column(Modifier.weight(1f)) {
-            // Title
-            Text(
-                title,
-                color = when {
-                    isWatched -> Color.White.copy(0.4f)
-                    isFocused -> Color.White
-                    else -> Color.White.copy(0.85f)
-                },
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-
-            // Synopsis
-            if (!overview.isNullOrBlank()) {
+        // Episode info with mark-as-watched button at bottom-right
+        Box(Modifier.weight(1f)) {
+            Column {
+                // Title
                 Text(
-                    overview,
-                    color = Color.White.copy(0.5f),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 5,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+                    title,
+                    color = when {
+                        isWatched -> Color.White.copy(0.4f)
+                        isFocused -> Color.White
+                        else -> Color.White.copy(0.85f)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
+
+                // Synopsis
+                if (!overview.isNullOrBlank()) {
+                    Text(
+                        overview,
+                        color = Color.White.copy(0.5f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 4,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                // Runtime + release date + status
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (runtime != null) {
+                        Text(
+                            "(${runtime} min)",
+                            color = Color.White.copy(0.4f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (releaseDate != null) {
+                        Text(
+                            releaseDate,
+                            color = Color.White.copy(0.35f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (isPlaying) {
+                        Text(
+                            "Playing",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = primary
+                        )
+                    }
+                }
             }
 
-            // Runtime + release date + status
-            Row(
-                modifier = Modifier.padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (runtime != null) {
-                    Text(
-                        "(${runtime} min)",
-                        color = Color.White.copy(0.4f),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (releaseDate != null) {
-                    Text(
-                        releaseDate,
-                        color = Color.White.copy(0.35f),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (isPlaying) {
-                    Text(
-                        "Playing",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = primary
-                    )
-                }
-            }
+            // Mark as watched button — top-right
+            WatchedToggleButton(
+                isWatched = isWatched,
+                isFocused = buttonFocused,
+                focusRequester = buttonRequester,
+                thumbnailRequester = thumbnailRequester,
+                onFocusChanged = { buttonFocused = it },
+                onClick = onToggleWatched,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
         }
-
-        // Mark as watched toggle button
-        Spacer(Modifier.width(8.dp))
-        WatchedToggleButton(
-            isWatched = isWatched,
-            isFocused = buttonFocused,
-            focusRequester = buttonRequester,
-            thumbnailRequester = thumbnailRequester,
-            onFocusChanged = { buttonFocused = it },
-            onClick = onToggleWatched
-        )
     }
 }
 
@@ -681,12 +691,12 @@ private fun WatchedToggleButton(
     focusRequester: FocusRequester,
     thumbnailRequester: FocusRequester,
     onFocusChanged: (Boolean) -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
-    // Animate width: icon-only (32dp) → icon + text on focus
-    val targetWidth = if (isFocused) if (isWatched) 120.dp else 150.dp else 32.dp
+    val targetWidth = if (isFocused) if (isWatched) 100.dp else 138.dp else 24.dp
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
@@ -711,31 +721,38 @@ private fun WatchedToggleButton(
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .width(animatedWidth)
-            .height(32.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(24.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
             .focusRequester(focusRequester)
             .focusProperties { left = thumbnailRequester; right = FocusRequester.Cancel }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+                    // Move to thumbnail first, then let the system handle up/down to adjacent episodes
+                    thumbnailRequester.requestFocus()
+                    false // Don't consume — let the key propagate from the thumbnail
+                } else false
+            }
             .onFocusChanged { onFocusChanged(it.isFocused) }
             .clickable(onClick = onClick)
             .focusable()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         Text(
             if (isWatched) "✓" else "+",
             color = iconColor,
-            style = MaterialTheme.typography.titleSmall
+            style = MaterialTheme.typography.labelMedium
         )
 
         if (isFocused) {
             Spacer(Modifier.width(4.dp))
             Text(
-                if (isWatched) "Watched" else "Mark watched",
+                if (isWatched) "Watched" else "Mark as watched",
                 color = if (isWatched) primary else Color.White,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1
