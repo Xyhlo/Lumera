@@ -1137,8 +1137,10 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                                 NavDestination.Search -> {
+                                                    val searchHomeVm = hiltViewModel<HomeViewModel>()
                                                     SearchScreen(
                                                         currentProfile = currentProfile,
+                                                        watchedIds = searchHomeVm.state.collectAsState().value.watchedIds,
                                                         onMovieClick = { movie ->
                                                             selectedMovieId = movie.id
                                                             selectedMovieType = movie.type
@@ -1286,8 +1288,10 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                                 NavDestination.Search -> {
+                                                    val searchHomeVm = hiltViewModel<HomeViewModel>()
                                                     SearchScreen(
                                                         currentProfile = currentProfile,
+                                                        watchedIds = searchHomeVm.state.collectAsState().value.watchedIds,
                                                         onMovieClick = { movie ->
                                                             selectedMovieId = movie.id
                                                             selectedMovieType = movie.type
@@ -1429,7 +1433,8 @@ class MainActivity : ComponentActivity() {
                                 onScrollPositionChange = { index, offset ->
                                     gridRestoreState.scrollIndex = index
                                     gridRestoreState.scrollOffset = offset
-                                }
+                                },
+                                watchedIds = gridVm.state.collectAsState().value.watchedIds
                             )
                             // Sync gridViewItems when ViewModel state updates (after loadMoreItems)
                             val vmState by gridVm.state.collectAsState()

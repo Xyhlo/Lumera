@@ -70,6 +70,7 @@ class DetailsViewModel @Inject constructor(
         val isLoading: Boolean = true,
         val isLoadingStreams: Boolean = false,
         val resumePlaybackId: String? = null,
+        val isMovieWatched: Boolean = false,
         val autoPlayStream: Stream? = null,
         val addonSubtitles: List<AddonSubtitle> = emptyList(),
         val availableStreams: List<Stream> = emptyList(),
@@ -162,8 +163,12 @@ class DetailsViewModel @Inject constructor(
                         } else null
                     }
                 } else {
-                    dao.getHistoryItem(streamFetchId)?.id
+                    val movieHistory = dao.getHistoryItem(streamFetchId)
+                    if (movieHistory?.watched == true) null else movieHistory?.id
                 }
+                val isMovieWatched = if (details.type != "series") {
+                    dao.getHistoryItem(streamFetchId)?.watched == true
+                } else false
                 // Build per-episode progress map for the episodes sidebar
                 val episodeProgressMap = if (details.type == "series") {
                     buildEpisodeProgressMap(streamFetchId)
@@ -175,6 +180,7 @@ class DetailsViewModel @Inject constructor(
                     contentKey = requestKey,
                     isLoading = false,
                     resumePlaybackId = resumePlaybackId,
+                    isMovieWatched = isMovieWatched,
                     episodeProgressMap = episodeProgressMap,
                     autoPlayStream = null,
                     addonSubtitles = emptyList(),
@@ -230,14 +236,19 @@ class DetailsViewModel @Inject constructor(
                     } else null
                 }
             } else {
-                dao.getHistoryItem(meta.id)?.id
+                val movieHistory = dao.getHistoryItem(meta.id)
+                if (movieHistory?.watched == true) null else movieHistory?.id
             }
+            val isMovieWatched = if (meta.type != "series") {
+                dao.getHistoryItem(meta.id)?.watched == true
+            } else false
             if (_state.value.meta?.id == meta.id && _state.value.meta?.type == meta.type) {
                 val episodeProgressMap = if (meta.type == "series") {
                     buildEpisodeProgressMap(meta.id)
                 } else emptyMap()
                 _state.value = _state.value.copy(
                     resumePlaybackId = resumePlaybackId,
+                    isMovieWatched = isMovieWatched,
                     autoPlayStream = null,
                     episodeProgressMap = episodeProgressMap
                 )
@@ -456,6 +467,39 @@ class DetailsViewModel @Inject constructor(
     }
 
     // ── Mark episode watched/unwatched ──
+
+    fun toggleMovieWatched() {
+        val meta = _state.value.meta ?: return
+        if (meta.type == "series") return
+        val itemId = _state.value.resolvedId ?: meta.id
+        val isCurrentlyWatched = _state.value.isMovieWatched
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (isCurrentlyWatched) {
+                dao.deleteHistoryItem(itemId)
+                traktSyncManager.pushMovieUnwatched(itemId)
+            } else {
+                dao.upsertHistory(
+                    WatchHistoryEntity(
+                        id = itemId,
+                        title = meta.name,
+                        poster = meta.poster,
+                        position = 0L,
+                        duration = 0L,
+                        lastWatched = System.currentTimeMillis(),
+                        type = "movie",
+                        watched = true,
+                        scrobbled = true
+                    )
+                )
+                traktSyncManager.pushMovieWatched(itemId)
+            }
+            _state.value = _state.value.copy(
+                isMovieWatched = !isCurrentlyWatched,
+                resumePlaybackId = null
+            )
+        }
+    }
 
     fun toggleEpisodeWatched(episode: MetaVideo) {
         val meta = _state.value.meta ?: return

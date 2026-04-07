@@ -100,7 +100,8 @@ fun GridViewScreen(
     // Scroll position persistence for instant restoration
     initialScrollIndex: Int = 0,
     initialScrollOffset: Int = 0,
-    onScrollPositionChange: (Int, Int) -> Unit = { _, _ -> }
+    onScrollPositionChange: (Int, Int) -> Unit = { _, _ -> },
+    watchedIds: Set<String> = emptySet()
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -267,6 +268,7 @@ fun GridViewScreen(
                         title = item.name,
                         posterUrl = item.poster,
                         onClick = { onMovieClick(item) },
+                        isWatched = item.type == "movie" && item.id in watchedIds,
                         modifier = Modifier
                             .aspectRatio(2f / 3f)
                             .onPreviewKeyEvent { keyEvent ->

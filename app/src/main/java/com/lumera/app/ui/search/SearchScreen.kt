@@ -85,7 +85,8 @@ fun SearchScreen(
     discoverRequester: FocusRequester = remember { FocusRequester() },
     lastFocusedId: String? = null,
     onFocusedIdChange: (String?) -> Unit = {},
-    onDiscoverClick: (MetaItem) -> Unit = onMovieClick
+    onDiscoverClick: (MetaItem) -> Unit = onMovieClick,
+    watchedIds: Set<String> = emptySet()
 ) {
     val state by viewModel.state.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -303,7 +304,8 @@ fun SearchScreen(
                             },
                             focusRestored = discoverFocusRestored,
                             onFocusRestored = { discoverFocusRestored = true },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            watchedIds = watchedIds
                         )
                     }
                 } else {
@@ -345,6 +347,7 @@ fun SearchScreen(
                                             title = movie.name,
                                             posterUrl = movie.poster,
                                             onClick = { onMovieClick(movie) },
+                                            isWatched = movie.type == "movie" && movie.id in watchedIds,
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .aspectRatio(2f / 3f)
@@ -576,7 +579,8 @@ private fun DiscoverGrid(
     onScrollPositionChange: (Int, Int) -> Unit = { _, _ -> },
     focusRestored: Boolean = false,
     onFocusRestored: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    watchedIds: Set<String> = emptySet()
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -688,6 +692,7 @@ private fun DiscoverGrid(
                     title = item.name,
                     posterUrl = item.poster,
                     onClick = { onItemClick(item) },
+                    isWatched = item.type == "movie" && item.id in watchedIds,
                     modifier = Modifier
                         .aspectRatio(2f / 3f)
                         .onPreviewKeyEvent { keyEvent ->

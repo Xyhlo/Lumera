@@ -222,6 +222,9 @@ interface AddonDao {
     @Query("SELECT * FROM watch_history WHERE scrobbled = 1 AND watched = 0")
     suspend fun getScrobbledInProgressItems(): List<WatchHistoryEntity>
 
+    @Query("SELECT id FROM watch_history WHERE watched = 1")
+    fun getWatchedIds(): Flow<List<String>>
+
     // ── Series Next Up ──
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

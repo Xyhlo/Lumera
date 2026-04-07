@@ -59,6 +59,7 @@ class HomeViewModel @Inject constructor(
         val verticalScrollPosition: Pair<Int, Int> = Pair(0, 0),
         val heroRow: HomeRow? = null,
         val loadedProfileId: Int? = null,
+        val watchedIds: Set<String> = emptySet(), // IMDb IDs of watched items (movies + series)
         val enrichedMeta: Map<String, MetaItem> = emptyMap(),
         val tmdbEnabled: Boolean = false,
         val tmdbEnrichedIds: Set<String> = emptySet()
@@ -598,6 +599,18 @@ class HomeViewModel @Inject constructor(
                 }
             } else {
                 _state.value = _state.value.copy(history = emptyList(), seriesNextUp = emptyList())
+            }
+
+            // Load watched IDs for all tabs (watched indicator on posters)
+            launch {
+                dao.getWatchedIds().collect { ids ->
+                    // Extract canonical series ID from episode IDs (tt123:1:3 → tt123)
+                    val canonicalIds = ids.map { id ->
+                        val parts = id.split(":")
+                        if (parts.size >= 3) parts.first() else id
+                    }.toSet()
+                    _state.update { it.copy(watchedIds = canonicalIds) }
+                }
             }
 
             try {

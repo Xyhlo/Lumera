@@ -1,6 +1,7 @@
 package com.lumera.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -8,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +33,7 @@ import androidx.compose.ui.zIndex
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.compose.material3.Text
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import coil.compose.AsyncImage
@@ -52,6 +56,8 @@ import com.lumera.app.ui.theme.LocalRoundCorners
  * ============================================================================
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
+val LocalWatchedIds = compositionLocalOf { emptySet<String>() }
+
 @Composable
 fun LumeraCard(
     title: String,
@@ -59,6 +65,7 @@ fun LumeraCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     progress: Float = 0f,
+    isWatched: Boolean = false,
     onFocused: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -127,6 +134,32 @@ fun LumeraCard(
                         .clip(cardShape)
                         .background(MaterialTheme.colorScheme.surface)
                 )
+
+                // Watched badge — corner triangle with checkmark
+                if (isWatched) {
+                    val badgeColor = MaterialTheme.colorScheme.primary
+                    Canvas(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(28.dp)
+                    ) {
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(size.width, 0f)
+                            lineTo(0f, 0f)
+                            lineTo(size.width, size.height)
+                            close()
+                        }
+                        drawPath(path, badgeColor)
+                    }
+                    Text(
+                        "✓",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 1.dp, end = 2.dp)
+                    )
+                }
 
                 // Progress bar overlay for Continue Watching items
                 if (progress > 0f) {

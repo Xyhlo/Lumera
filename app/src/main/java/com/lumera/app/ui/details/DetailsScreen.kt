@@ -32,7 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import com.lumera.app.ui.theme.LocalRoundCorners
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.List
@@ -527,21 +530,21 @@ fun DetailsScreen(
                             onClick = { viewModel.openEpisodes() }
                         )
 
-                        ExpandableIconButton(
-                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
-                            icon = if (isInWatchlist) Icons.Default.Check else Icons.Default.Add,
-                            isActive = isInWatchlist,
-                            onClick = { viewModel.toggleWatchlist() }
-                        )
-
                         val seriesTrailer = state.tmdbTrailer
                         if (seriesTrailer != null) {
                             ExpandableIconButton(
                                 label = "Trailer",
-                                icon = Icons.Default.PlayArrow,
+                                icon = Icons.Default.Videocam,
                                 onClick = { onTrailerClick(seriesTrailer.key, seriesTrailer.name) }
                             )
                         }
+
+                        ExpandableIconButton(
+                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
+                            icon = Icons.Default.Bookmark,
+                            isActive = isInWatchlist,
+                            onClick = { viewModel.toggleWatchlist() }
+                        )
 
                         if (resumePlaybackId != null) {
                             ExpandableIconButton(
@@ -573,21 +576,28 @@ fun DetailsScreen(
                             }
                         )
 
-                        ExpandableIconButton(
-                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
-                            icon = if (isInWatchlist) Icons.Default.Check else Icons.Default.Add,
-                            isActive = isInWatchlist,
-                            onClick = { viewModel.toggleWatchlist() }
-                        )
-
                         val movieTrailer = state.tmdbTrailer
                         if (movieTrailer != null) {
                             ExpandableIconButton(
                                 label = "Trailer",
-                                icon = Icons.Default.PlayArrow,
+                                icon = Icons.Default.Videocam,
                                 onClick = { onTrailerClick(movieTrailer.key, movieTrailer.name) }
                             )
                         }
+
+                        ExpandableIconButton(
+                            label = if (state.isMovieWatched) "Watched" else "Mark as watched",
+                            icon = if (state.isMovieWatched) Icons.Default.Check else Icons.Default.Add,
+                            isActive = state.isMovieWatched,
+                            onClick = { viewModel.toggleMovieWatched() }
+                        )
+
+                        ExpandableIconButton(
+                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
+                            icon = Icons.Default.Bookmark,
+                            isActive = isInWatchlist,
+                            onClick = { viewModel.toggleWatchlist() }
+                        )
 
                         if (resumePlaybackId != null) {
                             ExpandableIconButton(
@@ -881,8 +891,8 @@ private fun ExpandableIconButton(
     val showText = isFocused
 
     // Estimate expanded width: icon(18) + padding(12+12) + gap(8) + text
-    // ~8dp per uppercase character is a reasonable estimate for labelMedium Bold
-    val expandedWidth = (42 + 8 + (label.uppercase().length * 8)).coerceIn(80, 220).dp
+    // ~8dp per uppercase character, minimum 110dp to fit short labels like RESUME/WATCHED
+    val expandedWidth = (42 + 8 + (label.uppercase().length * 8)).coerceIn(110, 220).dp
 
     // Bubble width: icon-only → icon + label
     val bubbleWidth by animateDpAsState(

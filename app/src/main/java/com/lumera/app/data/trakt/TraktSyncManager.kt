@@ -224,6 +224,38 @@ class TraktSyncManager @Inject constructor(
     // ── Watch History (mark as watched) ──
 
     /**
+     * Mark a movie as watched on Trakt.
+     */
+    suspend fun pushMovieWatched(imdbId: String) {
+        if (traktAuthManager.getAccessToken() == null) return
+        withContext(Dispatchers.IO) {
+            try {
+                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = TraktIds(imdb = imdbId))))
+                val response = traktSyncApi.addToHistory(body)
+                Log.d(TAG, "pushMovieWatched $imdbId: ${response.code()}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to push movie watched to Trakt", e)
+            }
+        }
+    }
+
+    /**
+     * Remove a movie from watched history on Trakt.
+     */
+    suspend fun pushMovieUnwatched(imdbId: String) {
+        if (traktAuthManager.getAccessToken() == null) return
+        withContext(Dispatchers.IO) {
+            try {
+                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = TraktIds(imdb = imdbId))))
+                val response = traktSyncApi.removeFromHistory(body)
+                Log.d(TAG, "pushMovieUnwatched $imdbId: ${response.code()}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to push movie unwatched to Trakt", e)
+            }
+        }
+    }
+
+    /**
      * Mark an episode as watched on Trakt.
      */
     suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int) {
@@ -428,6 +460,32 @@ class TraktSyncManager @Inject constructor(
     suspend fun syncSeriesNextUp() {
         withContext(Dispatchers.IO) {
             try {
+                // Sync watched movies from Trakt
+                val moviesResponse = traktSyncApi.getWatchedMovies()
+                if (moviesResponse.isSuccessful) {
+                    moviesResponse.body()?.forEach { watchedMovie ->
+                        val imdbId = watchedMovie.movie.ids.imdb ?: return@forEach
+                        val existing = dao.getHistoryItem(imdbId)
+                        if (existing == null) {
+                            dao.upsertHistory(
+                                WatchHistoryEntity(
+                                    id = imdbId,
+                                    title = watchedMovie.movie.title ?: "Unknown",
+                                    poster = null,
+                                    position = 0L,
+                                    duration = 0L,
+                                    lastWatched = System.currentTimeMillis(),
+                                    type = "movie",
+                                    watched = true,
+                                    scrobbled = true
+                                )
+                            )
+                        } else if (!existing.watched) {
+                            dao.upsertHistory(existing.copy(watched = true))
+                        }
+                    }
+                }
+
                 // Get all watched shows from Trakt
                 val showsResponse = traktSyncApi.getWatchedShows()
                 if (!showsResponse.isSuccessful) {

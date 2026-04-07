@@ -142,6 +142,7 @@ fun HomeScreen(
             }
     ) {
         LumeraBackground {
+        CompositionLocalProvider(com.lumera.app.ui.components.LocalWatchedIds provides state.watchedIds) {
         // LOGIC: If we are just starting OR the ViewModel is loading, show the Loading Box.
         // This box accepts focus immediately, which forces the NavDrawer to collapse.
         if (state.isLoading || state.loadedScreen != screenName || state.loadedProfileId != currentProfile?.id) {
@@ -220,6 +221,7 @@ fun HomeScreen(
                 )
             }
         }
+        } // CompositionLocalProvider
     }
 }
 }

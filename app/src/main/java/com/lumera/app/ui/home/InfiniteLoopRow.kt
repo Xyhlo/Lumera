@@ -46,6 +46,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.ui.components.LumeraCard
+import com.lumera.app.ui.components.LocalWatchedIds
 import com.lumera.app.ui.components.LumeraLandscapeCard
 import com.lumera.app.ui.utils.ImagePrefetcher
 import kotlinx.coroutines.delay
@@ -438,11 +439,13 @@ private fun LinearContent(
                         )
                     )
                 } else {
+                    val watchedIds = LocalWatchedIds.current
                     LumeraCard(
                         title = item.name,
                         posterUrl = item.poster,
                         onClick = { onMovieClick(item) },
                         progress = item.progress,
+                        isWatched = item.type == "movie" && item.id in watchedIds,
                         onFocused = {
                             ImagePrefetcher.prefetchAround(context, imageUrls, index)
                             onFocused(item, uniqueKey)
@@ -657,12 +660,13 @@ private fun InfiniteGridContent(
                             }
                     ) {
                         val uniqueKey = "${rowIndex}_${item.movie.id}_$scrollIndex"
-                        
+                        val watchedIds = LocalWatchedIds.current
                         LumeraCard(
                             title = item.movie.name,
                             posterUrl = item.movie.poster,
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
+                            isWatched = item.movie.type == "movie" && item.movie.id in watchedIds,
                             onFocused = {
                                 currentFocusedIndex = scrollIndex
                                 val logicalIndex = scrollIndex % sectionSize
@@ -864,11 +868,13 @@ private fun FiniteGridContent(
                                 } else false
                             }
                     ) {
+                        val watchedIds = LocalWatchedIds.current
                         LumeraCard(
                             title = item.movie.name,
                             posterUrl = item.movie.poster,
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
+                            isWatched = item.movie.type == "movie" && item.movie.id in watchedIds,
                             onFocused = {
                                 ImagePrefetcher.prefetchAround(context, imageUrls, index)
                                 onFocused(item.movie, uniqueKey)
