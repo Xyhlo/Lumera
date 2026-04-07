@@ -95,15 +95,17 @@ fun StudioDetailScreen(
             }
             is StudioDetailState.Success -> {
                 val restoreFocusRequester = remember { FocusRequester() }
+                val initialFocusRequester = remember { FocusRequester() }
                 var restoreRowKey by rememberSaveable { mutableStateOf<String?>(null) }
                 var restoreIndex by rememberSaveable { mutableStateOf(-1) }
 
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     if (restoreRowKey != null && restoreIndex >= 0) {
-                        kotlinx.coroutines.delay(300)
                         runCatching { restoreFocusRequester.requestFocus() }
                         restoreRowKey = null
                         restoreIndex = -1
+                    } else {
+                        runCatching { initialFocusRequester.requestFocus() }
                     }
                 }
 
@@ -123,7 +125,8 @@ fun StudioDetailScreen(
                     },
                     restoreRowKey = restoreRowKey,
                     restoreIndex = restoreIndex,
-                    restoreFocusRequester = restoreFocusRequester
+                    restoreFocusRequester = restoreFocusRequester,
+                    initialFocusRequester = initialFocusRequester
                 )
             }
         }
@@ -142,7 +145,8 @@ private fun StudioContent(
     onLoadMore: (mediaType: String, railType: String) -> Unit,
     restoreRowKey: String?,
     restoreIndex: Int,
-    restoreFocusRequester: FocusRequester
+    restoreFocusRequester: FocusRequester,
+    initialFocusRequester: FocusRequester
 ) {
     val density = LocalDensity.current
     val verticalPivotPx = remember(density) { with(density) { 45.dp.toPx() } }
@@ -174,7 +178,7 @@ private fun StudioContent(
                     contentPadding = PaddingValues(top = 5.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    rails.forEach { rail ->
+                    rails.forEachIndexed { railIndex, rail ->
                         val rowKey = "${rail.mediaType}_${rail.railType}"
                         item(key = rowKey) {
                             DiscoverRailSection(
@@ -186,7 +190,8 @@ private fun StudioContent(
                                 },
                                 onLoadMore = { onLoadMore(rail.mediaType, rail.railType) },
                                 restoreIndex = if (restoreRowKey == rowKey) restoreIndex else -1,
-                                restoreFocusRequester = if (restoreRowKey == rowKey) restoreFocusRequester else null
+                                restoreFocusRequester = if (restoreRowKey == rowKey) restoreFocusRequester else null,
+                                initialFocusRequester = if (railIndex == 0) initialFocusRequester else null
                             )
                         }
                     }
@@ -271,7 +276,8 @@ private fun DiscoverRailSection(
     onItemClick: (type: String, id: String, index: Int) -> Unit,
     onLoadMore: () -> Unit,
     restoreIndex: Int = -1,
-    restoreFocusRequester: FocusRequester? = null
+    restoreFocusRequester: FocusRequester? = null,
+    initialFocusRequester: FocusRequester? = null
 ) {
     val density = LocalDensity.current
     val startPad = 48.dp
@@ -321,8 +327,11 @@ private fun DiscoverRailSection(
                     PosterCard(
                         item = item,
                         accentColor = accentColor,
-                        modifier = if (restoreFocusRequester != null && index == restoreIndex)
-                            Modifier.focusRequester(restoreFocusRequester) else Modifier
+                        modifier = when {
+                            restoreFocusRequester != null && index == restoreIndex -> Modifier.focusRequester(restoreFocusRequester)
+                            initialFocusRequester != null && index == 0 -> Modifier.focusRequester(initialFocusRequester)
+                            else -> Modifier
+                        }
                     ) {
                         val stremioType = if (item.type == "series") "series" else "movie"
                         onItemClick(stremioType, "tmdb:${item.tmdbId}", index)

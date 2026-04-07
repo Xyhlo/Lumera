@@ -474,27 +474,30 @@ class TraktSyncManager @Inject constructor(
                         val progress = progressResponse.body() ?: continue
 
                         val nextEp = progress.nextEpisode
+                        val existing = dao.getSeriesNextUp(imdbId)
                         if (nextEp != null) {
-                            // Parse air date from ISO 8601
-                            val airDate = nextEp.firstAired?.take(10) // "2025-07-10T00:00:00.000Z" → "2025-07-10"
+                            val airDate = nextEp.firstAired?.take(10)
+                            // Preserve existing poster and timestamp if next episode unchanged
+                            val unchanged = existing != null &&
+                                !existing.isComplete &&
+                                existing.nextSeason == nextEp.season &&
+                                existing.nextEpisode == nextEp.number
 
                             dao.upsertSeriesNextUp(
                                 SeriesNextUpEntity(
                                     seriesId = imdbId,
                                     title = show.show.title ?: "Unknown",
-                                    poster = null, // Will be resolved lazily
+                                    poster = existing?.poster,
                                     nextSeason = nextEp.season,
                                     nextEpisode = nextEp.number,
                                     nextEpisodeTitle = nextEp.title,
                                     nextReleased = airDate,
                                     isComplete = false,
-                                    updatedAt = System.currentTimeMillis()
+                                    updatedAt = if (unchanged) existing.updatedAt else System.currentTimeMillis()
                                 )
                             )
-                            updated++
+                            if (!unchanged) updated++
                         } else {
-                            // No next episode — show is complete
-                            val existing = dao.getSeriesNextUp(imdbId)
                             if (existing != null && !existing.isComplete) {
                                 dao.upsertSeriesNextUp(existing.copy(isComplete = true, updatedAt = System.currentTimeMillis()))
                                 updated++

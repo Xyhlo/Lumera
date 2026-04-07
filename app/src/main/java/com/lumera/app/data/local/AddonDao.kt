@@ -94,6 +94,9 @@ interface AddonDao {
     @Query("SELECT * FROM watch_history WHERE id = :id")
     suspend fun getHistoryItem(id: String): WatchHistoryEntity?
 
+    @Query("SELECT * FROM watch_history WHERE id LIKE :prefix || '%'")
+    suspend fun getHistoryItemsByPrefix(prefix: String): List<WatchHistoryEntity>
+
     @Query(
         "SELECT * FROM watch_history " +
             "WHERE type = 'series' AND id LIKE :episodePrefix " +

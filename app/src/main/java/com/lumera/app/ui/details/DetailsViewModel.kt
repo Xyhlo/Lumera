@@ -183,7 +183,9 @@ class DetailsViewModel @Inject constructor(
                     tmdbRecommendations = emptyList(),
                     tmdbVideos = emptyList(),
                     tmdbCollection = emptyList(),
-                    tmdbCollectionName = null
+                    tmdbCollectionName = null,
+                    tmdbEnabled = isTmdbEnabled,
+                    tmdbLoading = isTmdbEnabled
                 )
                 // Update next-up entry when details load
                 if (details.type == "series") {
@@ -316,35 +318,41 @@ class DetailsViewModel @Inject constructor(
             progressMap[key]?.watched != true
         }
 
+        val existing = dao.getSeriesNextUp(seriesId)
+
         if (nextEpisode != null) {
-            // There's a next episode to watch
             val epTitle = nextEpisode.title.takeIf { it.isNotBlank() && it != "Episode" }
+            // Only update timestamp if the next episode actually changed
+            val unchanged = existing != null &&
+                !existing.isComplete &&
+                existing.nextSeason == nextEpisode.season &&
+                existing.nextEpisode == nextEpisode.episode
             dao.upsertSeriesNextUp(
                 SeriesNextUpEntity(
                     seriesId = seriesId,
                     title = title,
-                    poster = poster,
+                    poster = poster ?: existing?.poster,
                     nextSeason = nextEpisode.season,
                     nextEpisode = nextEpisode.episode,
                     nextEpisodeTitle = epTitle,
                     nextReleased = nextEpisode.released?.take(10),
                     isComplete = false,
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = if (unchanged) existing.updatedAt else System.currentTimeMillis()
                 )
             )
         } else {
-            // All episodes watched — mark as complete
+            val alreadyComplete = existing?.isComplete == true
             dao.upsertSeriesNextUp(
                 SeriesNextUpEntity(
                     seriesId = seriesId,
                     title = title,
-                    poster = poster,
+                    poster = poster ?: existing?.poster,
                     nextSeason = 0,
                     nextEpisode = 0,
                     nextEpisodeTitle = null,
                     nextReleased = null,
                     isComplete = true,
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = if (alreadyComplete) existing.updatedAt else System.currentTimeMillis()
                 )
             )
         }

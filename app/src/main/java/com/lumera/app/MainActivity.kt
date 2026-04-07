@@ -859,6 +859,7 @@ class MainActivity : ComponentActivity() {
             var torrentProgress by remember { mutableStateOf<TorrentProgress?>(null) }
             var selectedMovieTitle by rememberSaveable { mutableStateOf("") }
             var selectedMoviePoster by rememberSaveable { mutableStateOf("") }
+            var selectedMovieBackground by rememberSaveable { mutableStateOf("") }
             var selectedMovieLogo by rememberSaveable { mutableStateOf("") }
             var selectedAddonBaseUrl by rememberSaveable { mutableStateOf<String?>(null) }
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1114,6 +1115,7 @@ class MainActivity : ComponentActivity() {
                                                                 selectedMovieType = movie.type
                                                                 selectedMovieTitle = movie.name
                                                                 selectedMoviePoster = movie.poster ?: ""
+                                                                selectedMovieBackground = movie.background ?: ""
                                                                 selectedMovieLogo = movie.logo ?: ""
                                                                 selectedAddonBaseUrl = movie.addonBaseUrl
                                                                 detailsResumePlaybackHint = null
@@ -1141,6 +1143,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1170,6 +1173,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1202,6 +1206,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1259,6 +1264,7 @@ class MainActivity : ComponentActivity() {
                                                                 selectedMovieType = movie.type
                                                                 selectedMovieTitle = movie.name
                                                                 selectedMoviePoster = movie.poster ?: ""
+                                                                selectedMovieBackground = movie.background ?: ""
                                                                 selectedMovieLogo = movie.logo ?: ""
                                                                 selectedAddonBaseUrl = movie.addonBaseUrl
                                                                 detailsResumePlaybackHint = null
@@ -1286,6 +1292,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1315,6 +1322,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1347,6 +1355,7 @@ class MainActivity : ComponentActivity() {
                                                             selectedMovieType = movie.type
                                                             selectedMovieTitle = movie.name
                                                             selectedMoviePoster = movie.poster ?: ""
+                                                            selectedMovieBackground = movie.background ?: ""
                                                             selectedMovieLogo = movie.logo ?: ""
                                                             selectedAddonBaseUrl = movie.addonBaseUrl
                                                             detailsResumePlaybackHint = null
@@ -1392,6 +1401,7 @@ class MainActivity : ComponentActivity() {
                                     selectedMovieType = movie.type
                                     selectedMovieTitle = movie.name
                                     selectedMoviePoster = movie.poster ?: ""
+                                    selectedMovieBackground = movie.background ?: ""
                                     selectedMovieLogo = movie.logo ?: ""
                                     selectedAddonBaseUrl = movie.addonBaseUrl
                                     detailsResumePlaybackHint = null

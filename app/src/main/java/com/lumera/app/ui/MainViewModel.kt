@@ -60,6 +60,17 @@ class MainViewModel @Inject constructor(
             traktAuthManager.refreshConnectionState()
             traktSyncManager.resetActivityState()
             startTraktPeriodicSync()
+
+            // Watch for Trakt connection changes (e.g. user connects after login)
+            launch {
+                traktAuthManager.isConnected.collect { connected ->
+                    if (connected && traktSyncJob?.isActive != true) {
+                        startTraktPeriodicSync()
+                    } else if (!connected) {
+                        traktSyncJob?.cancel()
+                    }
+                }
+            }
         }
     }
 

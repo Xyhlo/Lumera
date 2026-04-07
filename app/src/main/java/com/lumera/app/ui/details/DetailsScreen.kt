@@ -238,13 +238,11 @@ fun DetailsScreen(
         if (contentReady) {
             if (restoreRowKey != null) {
                 // Back navigation from Jetpack Nav: restore focus
-                kotlinx.coroutines.delay(400)
                 runCatching { restoreFocusRequester.requestFocus() }
                 restoreRowKey = null
                 restoreIndex = -1
             } else {
                 // First load: focus hero button
-                kotlinx.coroutines.delay(200)
                 runCatching { firstButtonFocusRequester.requestFocus() }
             }
         }
@@ -259,13 +257,22 @@ fun DetailsScreen(
         }
     }
 
+    // Smooth content reveal: animate alpha from 0→1 when content becomes ready
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (contentReady) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "content_reveal"
+    )
+
     Box(modifier = Modifier.fillMaxSize().background(bg)) {
-        if (!showMovieContent || tmdbPending) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = accentColor)
+        // Loading sweep — solid bg with subtle light sweep while data loads
+        if (!contentReady) {
+            com.lumera.app.ui.components.DetailsLoadingSweep()
         }
         if (showMovieContent && !tmdbPending) {
             val currentMovie = requireNotNull(movie)
             val bgImage = currentMovie.background ?: currentMovie.poster
+            Box(modifier = Modifier.alpha(contentAlpha)) {
             AsyncImage(
                 model = bgImage,
                 contentDescription = null,
@@ -743,6 +750,7 @@ fun DetailsScreen(
             }
             } // LazyColumn
             } // CompositionLocalProvider verticalPivot
+            } // contentAlpha Box
         }
 
         GlassSidebar(

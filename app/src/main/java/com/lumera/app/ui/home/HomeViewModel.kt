@@ -285,18 +285,34 @@ class HomeViewModel @Inject constructor(
                 metadataFallbackCache[key] = fallback
                 applyMetadataFallbackToState(type = item.type, id = item.id, fallback = fallback, sourceItem = item)
 
-                // Persist resolved images to watch history DB so they survive restarts
+                // Persist resolved images to watch history + series next-up DB
                 launch(Dispatchers.IO) {
-                    val historyItem = dao.getHistoryItem(item.id) ?: return@launch
-                    val needsPoster = historyItem.poster.isNullOrBlank() && !fallback.poster.isNullOrBlank()
-                    val needsBackground = historyItem.background.isNullOrBlank() && !fallback.background.isNullOrBlank()
-                    val needsLogo = historyItem.logo.isNullOrBlank() && !fallback.logo.isNullOrBlank()
-                    if (needsPoster || needsBackground || needsLogo) {
-                        dao.upsertHistory(historyItem.copy(
-                            poster = if (needsPoster) fallback.poster else historyItem.poster,
-                            background = if (needsBackground) fallback.background else historyItem.background,
-                            logo = if (needsLogo) fallback.logo else historyItem.logo
-                        ))
+                    // For series, the history stores episode-level IDs (e.g. tt123:1:3)
+                    // but the MetaItem uses the canonical series ID (tt123).
+                    // Look up both the exact ID and all episode entries by prefix.
+                    val historyItems = if (item.type == "series") {
+                        dao.getHistoryItemsByPrefix(item.id)
+                    } else {
+                        listOfNotNull(dao.getHistoryItem(item.id))
+                    }
+                    for (historyItem in historyItems) {
+                        val needsPoster = historyItem.poster.isNullOrBlank() && !fallback.poster.isNullOrBlank()
+                        val needsBackground = historyItem.background.isNullOrBlank() && !fallback.background.isNullOrBlank()
+                        val needsLogo = historyItem.logo.isNullOrBlank() && !fallback.logo.isNullOrBlank()
+                        if (needsPoster || needsBackground || needsLogo) {
+                            dao.upsertHistory(historyItem.copy(
+                                poster = if (needsPoster) fallback.poster else historyItem.poster,
+                                background = if (needsBackground) fallback.background else historyItem.background,
+                                logo = if (needsLogo) fallback.logo else historyItem.logo
+                            ))
+                        }
+                    }
+                    // Also update series next-up poster if missing
+                    if (!fallback.poster.isNullOrBlank()) {
+                        val nextUp = dao.getSeriesNextUp(item.id)
+                        if (nextUp != null && nextUp.poster.isNullOrBlank()) {
+                            dao.upsertSeriesNextUp(nextUp.copy(poster = fallback.poster))
+                        }
                     }
                 }
             } catch (_: Exception) {
@@ -556,8 +572,12 @@ class HomeViewModel @Inject constructor(
                 lastFocusedKey = null,  // Reset focus when loading new screen
                 rowScrollPositions = emptyMap(),  // Reset scroll positions for new screen
                 verticalScrollPosition = Pair(0, 0),  // Reset vertical scroll for new screen
-                loadedProfileId = null
+                loadedProfileId = null,
+                enrichedMeta = emptyMap(),
+                tmdbEnrichedIds = emptySet(),
+                tmdbEnabled = currentProfile?.tmdbEnabled == true
             )
+            tmdbEnrichmentInFlight.clear()
             lastFocusedKeyMemory = null
             rowScrollPositionsMemory.clear()
             verticalScrollPositionMemory = Pair(0, 0)

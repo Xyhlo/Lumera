@@ -214,7 +214,11 @@ fun HeroCarousel(
     ) {
         AnimatedContent(
             targetState = currentItem,
-            transitionSpec = { fadeIn(tween(500)).togetherWith(fadeOut(tween(300))) },
+            transitionSpec = {
+                fadeIn(tween(500)).togetherWith(fadeOut(tween(300)))
+                    .using(androidx.compose.animation.SizeTransform(clip = false))
+            },
+            contentKey = { "${it.type}:${it.id}" },
             label = "hero_bg"
         ) { item ->
             val bgReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
@@ -273,6 +277,7 @@ fun HeroCarousel(
             AnimatedContent(
                 targetState = currentItem,
                 transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
+                contentKey = { "${it.type}:${it.id}" },
                 label = "hero_info"
             ) { item ->
                 // Hide info content while waiting for TMDB enrichment to prevent addon data flash
