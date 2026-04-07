@@ -23,6 +23,11 @@ class WatchlistViewModel @Inject constructor(
 
     private val resolveInFlight = mutableSetOf<String>()
 
+    var lastFocusedKey: String? = null
+
+    val movieRowState = androidx.compose.foundation.lazy.LazyListState()
+    val seriesRowState = androidx.compose.foundation.lazy.LazyListState()
+
     val movieItems: StateFlow<List<MetaItem>> = dao.getWatchlistByType("movie")
         .map { list -> list.map { it.toMetaItem() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

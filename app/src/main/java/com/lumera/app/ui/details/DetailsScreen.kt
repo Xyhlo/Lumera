@@ -1356,9 +1356,9 @@ private fun RecommendationRow(
 @Composable
 private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val roundCorners = LocalRoundCorners.current
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val cardShape = if (roundCorners) RoundedCornerShape(if (isFocused) 16.dp else 12.dp) else RectangleShape
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
 
     Box(

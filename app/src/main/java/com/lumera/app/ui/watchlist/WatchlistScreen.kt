@@ -19,9 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.stremio.MetaItem
@@ -40,10 +38,12 @@ fun WatchlistScreen(
     val movies by viewModel.movieItems.collectAsState()
     val series by viewModel.seriesItems.collectAsState()
 
+    androidx.activity.compose.BackHandler { drawerRequester.requestFocus() }
+
     val upKeyDebouncer = remember { UpKeyDebouncer() }
     val dpadRepeatGate = remember { DpadRepeatGate() }
 
-    var lastFocusedKey by remember { mutableStateOf<String?>(null) }
+    var lastFocusedKey by remember { mutableStateOf(viewModel.lastFocusedKey) }
 
     // Resolve missing posters (e.g., items pulled from Trakt)
     LaunchedEffect(movies) { movies.forEach { viewModel.resolvePosterIfNeeded(it) } }
@@ -53,11 +53,7 @@ fun WatchlistScreen(
     val startPadding = if (isTopNav) 50.dp else 120.dp
     val topPadding = if (isTopNav) 24.dp else 16.dp
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (movies.isEmpty() && series.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -73,15 +69,7 @@ fun WatchlistScreen(
                     .padding(top = topPadding),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Watchlist",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp
-                    ),
-                    color = Color.White,
-                    modifier = Modifier.padding(start = startPadding)
-                )
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 20.dp))
 
                 if (movies.isNotEmpty()) {
                     InfiniteLoopRow(
@@ -94,6 +82,7 @@ fun WatchlistScreen(
                         onViewMore = {},
                         onFocused = { _: MetaItem?, key: String ->
                             lastFocusedKey = key
+                            viewModel.lastFocusedKey = key
                         },
                         entryRequester = entryRequester,
                         drawerRequester = drawerRequester,
@@ -102,7 +91,8 @@ fun WatchlistScreen(
                         isFirstRow = true,
                         isInfiniteLoopEnabled = false,
                         upKeyDebouncer = upKeyDebouncer,
-                        repeatGate = dpadRepeatGate
+                        repeatGate = dpadRepeatGate,
+                        externalListState = viewModel.movieRowState
                     )
                 }
 
@@ -117,6 +107,7 @@ fun WatchlistScreen(
                         onViewMore = {},
                         onFocused = { _: MetaItem?, key: String ->
                             lastFocusedKey = key
+                            viewModel.lastFocusedKey = key
                         },
                         entryRequester = entryRequester,
                         drawerRequester = drawerRequester,
@@ -125,7 +116,8 @@ fun WatchlistScreen(
                         isFirstRow = movies.isEmpty(),
                         isInfiniteLoopEnabled = false,
                         upKeyDebouncer = upKeyDebouncer,
-                        repeatGate = dpadRepeatGate
+                        repeatGate = dpadRepeatGate,
+                        externalListState = viewModel.seriesRowState
                     )
                 }
             }

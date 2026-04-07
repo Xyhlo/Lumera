@@ -93,7 +93,8 @@ fun NavDrawer(
     val showStaticMask = currentDestination in listOf(
         NavDestination.Home,
         NavDestination.Movies,
-        NavDestination.Series
+        NavDestination.Series,
+        NavDestination.Watchlist
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
