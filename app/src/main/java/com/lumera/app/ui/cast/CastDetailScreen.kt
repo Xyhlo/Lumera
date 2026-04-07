@@ -58,6 +58,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.lumera.app.data.tmdb.TmdbMetaPreview
 import com.lumera.app.data.tmdb.TmdbPersonDetail
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.home.FocusPivotSpec
 
 @Composable
@@ -92,16 +98,16 @@ fun CastDetailScreen(
             }
             is CastDetailState.Success -> {
                 val restoreFocusRequester = remember { FocusRequester() }
+                val initialFocusRequester = remember { FocusRequester() }
                 var restoreIndex by rememberSaveable { mutableStateOf(-1) }
-                var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
 
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     if (restoreIndex >= 0) {
                         kotlinx.coroutines.delay(300)
                         runCatching { restoreFocusRequester.requestFocus() }
                         restoreIndex = -1
-                    } else if (!hasRequestedInitialFocus) {
-                        hasRequestedInitialFocus = true
+                    } else {
+                        runCatching { initialFocusRequester.requestFocus() }
                     }
                 }
 
@@ -112,7 +118,8 @@ fun CastDetailScreen(
                         onNavigateToDetails(type, id)
                     },
                     restoreIndex = restoreIndex,
-                    restoreFocusRequester = restoreFocusRequester
+                    restoreFocusRequester = restoreFocusRequester,
+                    initialFocusRequester = initialFocusRequester
                 )
             }
         }
@@ -127,7 +134,8 @@ private fun CastDetailContent(
     textColor: Color,
     onNavigateToDetails: (String, String, Int) -> Unit,
     restoreIndex: Int = -1,
-    restoreFocusRequester: FocusRequester? = null
+    restoreFocusRequester: FocusRequester? = null,
+    initialFocusRequester: FocusRequester? = null
 ) {
     // Background photo
     if (person.profilePhoto != null) {
@@ -176,7 +184,7 @@ private fun CastDetailContent(
         }
 
         if (allCredits.isNotEmpty()) {
-            FilmographySection(allCredits, accentColor, textColor, onNavigateToDetails, restoreIndex, restoreFocusRequester)
+            FilmographySection(allCredits, accentColor, textColor, onNavigateToDetails, restoreIndex, restoreFocusRequester, initialFocusRequester)
         }
     }
 }
@@ -267,9 +275,11 @@ private fun FilmographySection(
     textColor: Color,
     onNavigateToDetails: (String, String, Int) -> Unit,
     restoreIndex: Int = -1,
-    restoreFocusRequester: FocusRequester? = null
+    restoreFocusRequester: FocusRequester? = null,
+    initialFocusRequester: FocusRequester? = null
 ) {
     val density = LocalDensity.current
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L) }
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -312,12 +322,21 @@ private fun FilmographySection(
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(credits, key = { i, it -> "${it.tmdbId}_$i" }) { index, item ->
-                FilmographyCard(
-                    item, accentColor, textColor,
-                    modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
-                ) {
-                    val stremioType = if (item.type == "tv") "series" else item.type
-                    onNavigateToDetails(stremioType, "tmdb:${item.tmdbId}", index)
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    FilmographyCard(
+                        item, accentColor, textColor,
+                        modifier = when {
+                            restoreFocusRequester != null && index == restoreIndex -> Modifier.focusRequester(restoreFocusRequester)
+                            initialFocusRequester != null && index == 0 -> Modifier.focusRequester(initialFocusRequester)
+                            else -> Modifier
+                        }
+                    ) {
+                        val stremioType = if (item.type == "tv") "series" else item.type
+                        onNavigateToDetails(stremioType, "tmdb:${item.tmdbId}", index)
+                    }
                 }
             }
         }

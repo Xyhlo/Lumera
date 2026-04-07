@@ -59,6 +59,12 @@ import coil.compose.AsyncImage
 import com.lumera.app.data.tmdb.TmdbDiscoverRail
 import com.lumera.app.data.tmdb.TmdbEntityDetail
 import com.lumera.app.data.tmdb.TmdbMetaPreview
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.home.FocusPivotSpec
 
 @Composable
@@ -280,6 +286,7 @@ private fun DiscoverRailSection(
     initialFocusRequester: FocusRequester? = null
 ) {
     val density = LocalDensity.current
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L) }
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -324,17 +331,22 @@ private fun DiscoverRailSection(
                 contentPadding = PaddingValues(start = startPad, end = endPadding)
             ) {
                 itemsIndexed(rail.items, key = { i, it -> "${it.tmdbId}_$i" }) { index, item ->
-                    PosterCard(
-                        item = item,
-                        accentColor = accentColor,
-                        modifier = when {
-                            restoreFocusRequester != null && index == restoreIndex -> Modifier.focusRequester(restoreFocusRequester)
-                            initialFocusRequester != null && index == 0 -> Modifier.focusRequester(initialFocusRequester)
-                            else -> Modifier
+                    Box(modifier = Modifier.onPreviewKeyEvent {
+                        if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                    }) {
+                        PosterCard(
+                            item = item,
+                            accentColor = accentColor,
+                            modifier = when {
+                                restoreFocusRequester != null && index == restoreIndex -> Modifier.focusRequester(restoreFocusRequester)
+                                initialFocusRequester != null && index == 0 -> Modifier.focusRequester(initialFocusRequester)
+                                else -> Modifier
+                            }
+                        ) {
+                            val stremioType = if (item.type == "series") "series" else "movie"
+                            onItemClick(stremioType, "tmdb:${item.tmdbId}", index)
                         }
-                    ) {
-                        val stremioType = if (item.type == "series") "series" else "movie"
-                        onItemClick(stremioType, "tmdb:${item.tmdbId}", index)
                     }
                 }
             }

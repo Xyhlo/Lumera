@@ -106,6 +106,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import com.lumera.app.R
+import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.home.FocusPivotSpec
 import com.lumera.app.data.tmdb.TmdbCastInfo
 import com.lumera.app.data.tmdb.TmdbCompanyInfo
@@ -1082,6 +1083,7 @@ private fun CastRow(
     restoreFocusRequester: FocusRequester? = null
 ) {
     val rowState = rememberLazyListState()
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -1107,6 +1109,7 @@ private fun CastRow(
             // Leading crew (directors, writers)
             itemsIndexed(leadingCrew, key = { i, it -> "crew_${it.tmdbId ?: i}" }) { index, member ->
                 Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
                     CastCard(
@@ -1140,6 +1143,7 @@ private fun CastRow(
                 val isFirstOverall = leadingCrew.isEmpty() && index == 0
                 val flatIndex = castOffset + index
                 Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && isFirstOverall) true else false
                 }) {
                     CastCard(
@@ -1230,6 +1234,7 @@ private fun StudioRow(
     restoreFocusRequester: FocusRequester? = null
 ) {
     val rowState = rememberLazyListState()
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -1250,11 +1255,16 @@ private fun StudioRow(
             contentPadding = PaddingValues(start = startPad, end = endPadding)
         ) {
             itemsIndexed(studios, key = { _, it -> "${it.tmdbId}:${it.name}" }) { index, studio ->
-                StudioChip(
-                    studio, textColor, accentColor,
-                    modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
-                ) {
-                    studio.tmdbId?.let { id -> onStudioClick(id, studio.name) }
+                Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
+                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
+                }) {
+                    StudioChip(
+                        studio, textColor, accentColor,
+                        modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
+                    ) {
+                        studio.tmdbId?.let { id -> onStudioClick(id, studio.name) }
+                    }
                 }
             }
         }
@@ -1316,6 +1326,7 @@ private fun RecommendationRow(
     restoreFocusRequester: FocusRequester? = null
 ) {
     val rowState = rememberLazyListState()
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L) }
     val density = LocalDensity.current
     val startPad = 48.dp
     val paddingPx = remember(density) { with(density) { startPad.toPx() } }
@@ -1337,6 +1348,7 @@ private fun RecommendationRow(
         ) {
             itemsIndexed(items, key = { _, it -> it.tmdbId }) { index, item ->
                 Box(modifier = Modifier.onPreviewKeyEvent {
+                    if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
                     if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
                 }) {
                     RecommendationCard(

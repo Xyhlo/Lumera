@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
 import com.lumera.app.data.tmdb.TmdbEpisodeEnrichment
@@ -45,7 +46,8 @@ sealed class SidebarState {
 }
 
 // Handles Back key for sidebar dismissal. Left trapping is handled per-item via focusProperties.
-private fun Modifier.dpadNavigation(onBack: () -> Unit, trapLeft: Boolean = true) = this.onPreviewKeyEvent {
+private fun Modifier.dpadNavigation(onBack: () -> Unit, trapLeft: Boolean = true, repeatGate: DpadRepeatGate? = null) = this.onPreviewKeyEvent {
+    if (repeatGate?.shouldConsume(it) == true) return@onPreviewKeyEvent true
     when {
         trapLeft && it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown -> true
         it.key == Key.Back && it.type == KeyEventType.KeyUp -> { onBack(); true }
@@ -219,6 +221,7 @@ fun EpisodesContent(
 
     val tabRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope() // Needed for manual scrolling
+    val repeatGate = remember { DpadRepeatGate(horizontalRepeatIntervalMs = 150L, verticalRepeatIntervalMs = 200L) }
 
     LaunchedEffect(selectedSeason) { onSeasonChange(selectedSeason) }
 
@@ -239,7 +242,10 @@ fun EpisodesContent(
                         number = num,
                         isSelected = num == selectedSeason,
                         modifier = Modifier
-                            .then(if (idx == 0) Modifier.onPreviewKeyEvent { it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown } else Modifier)
+                            .then(if (idx == 0) Modifier.onPreviewKeyEvent {
+                                if (repeatGate.shouldConsume(it)) return@onPreviewKeyEvent true
+                                it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown
+                            } else Modifier.onPreviewKeyEvent { repeatGate.shouldConsume(it) })
                             .then(if (num == selectedSeason) Modifier.focusRequester(tabRequester) else Modifier)
                             .focusProperties { up = FocusRequester.Cancel },
                         onClick = {
@@ -256,7 +262,7 @@ fun EpisodesContent(
         LazyColumn(
             state = listState, // Using the hoisted state
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.dpadNavigation(onDismiss, trapLeft = false)
+            modifier = Modifier.dpadNavigation(onDismiss, trapLeft = false, repeatGate = repeatGate)
         ) {
             if (episodes.isEmpty()) item { Text("No episodes found.", color = Color.Gray) }
             else {
@@ -325,6 +331,7 @@ fun SourcesContent(
     }
 
     val listState = rememberLazyListState()
+    val repeatGate = remember { DpadRepeatGate(verticalRepeatIntervalMs = 200L) }
 
     LaunchedEffect(selectedIndex, filtered) {
         if (filtered.isNotEmpty() && selectedIndex > 0) {
@@ -364,7 +371,7 @@ fun SourcesContent(
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.dpadNavigation(onBack)
+                modifier = Modifier.dpadNavigation(onBack, repeatGate = repeatGate)
             ) {
                 if (filtered.isEmpty()) item {
                     Box(Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
