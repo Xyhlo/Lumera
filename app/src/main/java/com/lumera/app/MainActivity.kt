@@ -876,6 +876,7 @@ class MainActivity : ComponentActivity() {
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
             var trailerReturnToken by rememberSaveable { mutableStateOf(0) }
             var isTrailerLoading by remember { mutableStateOf(false) }
+            var showTrailerError by remember { mutableStateOf(false) }
             var selectedPlaybackId by rememberSaveable { mutableStateOf("") }
             var selectedPlaybackType by rememberSaveable { mutableStateOf("movie") }
             var selectedPlaybackTitle by rememberSaveable { mutableStateOf("") }
@@ -1607,6 +1608,8 @@ class MainActivity : ComponentActivity() {
                                                     playerState.selectedPlayerSubtitles = emptyList()
                                                     playerState.selectedPlayerSources = emptyList()
                                                     activeView = "player"
+                                                } else {
+                                                    showTrailerError = true
                                                 }
                                             }
                                         }
@@ -2250,6 +2253,40 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    if (showTrailerError) {
+                        Dialog(onDismissRequest = { showTrailerError = false }) {
+                            Box(
+                                modifier = Modifier
+                                    .width(380.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
+                                    .padding(24.dp)
+                            ) {
+                                androidx.compose.foundation.layout.Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Trailer Unavailable",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(Modifier.height(24.dp))
+                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                        VoidButton(
+                                            text = "Dismiss",
+                                            onClick = { showTrailerError = false },
+                                            isPrimary = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Update dialogs (auto-shown after splash)
                     if (_splashFinished.value && !updateDismissed && appUpdateManager.isPopupEnabled) {

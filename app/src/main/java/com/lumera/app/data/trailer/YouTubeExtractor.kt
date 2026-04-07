@@ -199,7 +199,10 @@ class YouTubeExtractor @Inject constructor() {
             }
         }
 
+        Log.d(TAG, "Streams found: progressive=${progressive.size} adaptiveVideo=${adaptiveVideo.size} adaptiveAudio=${adaptiveAudio.size} hls=${manifestUrls.size}")
+
         if (manifestUrls.isEmpty() && progressive.isEmpty() && adaptiveVideo.isEmpty() && adaptiveAudio.isEmpty()) {
+            Log.w(TAG, "No playable streams found for $videoId")
             return null
         }
 
@@ -222,7 +225,7 @@ class YouTubeExtractor @Inject constructor() {
         val bestAudio = pickBestForClient(adaptiveAudio, PREFERRED_SEPARATE_CLIENT)
 
         // Prefer adaptive video+audio (highest quality) with MergingMediaSource.
-        // Fall back to progressive (combined but lower quality) if no adaptive available.
+        // Fall back to progressive, then adaptive video-only, then HLS manifest.
         val videoUrl: String
         val audioUrl: String?
         if (bestVideo != null && bestAudio != null) {
@@ -230,6 +233,12 @@ class YouTubeExtractor @Inject constructor() {
             audioUrl = resolveReachableUrl(bestAudio.url)
         } else if (bestProgressive != null) {
             videoUrl = resolveReachableUrl(bestProgressive.url)
+            audioUrl = null
+        } else if (bestVideo != null) {
+            videoUrl = resolveReachableUrl(bestVideo.url)
+            audioUrl = null
+        } else if (bestManifest != null) {
+            videoUrl = bestManifest.manifestUrl
             audioUrl = null
         } else {
             return null

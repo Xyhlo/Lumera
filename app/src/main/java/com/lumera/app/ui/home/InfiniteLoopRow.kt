@@ -139,8 +139,6 @@ fun InfiniteLoopRow(
     // Reset skip flag after restoration is complete (focus is established)
     LaunchedEffect(isRestoration) {
         if (isRestoration) {
-            // Wait for composition and focus to settle, then re-enable scrolling
-            delay(300)
             skipBringIntoViewScroll = false
         }
     }
