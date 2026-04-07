@@ -546,8 +546,8 @@ fun DetailsScreen(
                         }
 
                         ExpandableIconButton(
-                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
-                            icon = Icons.Default.Bookmark,
+                            label = if (isInWatchlist) "Watchlisted" else "Add to watchlist",
+                            icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             isActive = isInWatchlist,
                             onClick = { viewModel.toggleWatchlist() }
                         )
@@ -599,8 +599,8 @@ fun DetailsScreen(
                         )
 
                         ExpandableIconButton(
-                            label = if (isInWatchlist) "Watchlisted" else "Watchlist",
-                            icon = Icons.Default.Bookmark,
+                            label = if (isInWatchlist) "Watchlisted" else "Add to watchlist",
+                            icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             isActive = isInWatchlist,
                             onClick = { viewModel.toggleWatchlist() }
                         )

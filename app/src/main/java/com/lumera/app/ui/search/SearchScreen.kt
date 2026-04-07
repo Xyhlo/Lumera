@@ -69,7 +69,11 @@ import com.lumera.app.ui.home.ViewMoreCard
 import com.lumera.app.ui.utils.ImagePrefetcher
 import kotlinx.coroutines.delay
 
-private const val PREVIEW_COUNT = 4
+private const val PREVIEW_COUNT = 3
+private val RESULT_POSTER_WIDTH = 118.dp
+private val RESULT_POSTER_WIDTH_TOP_NAV = 116.dp
+private val RESULT_POSTER_HEIGHT = 208.dp
+private val RESULT_POSTER_HEIGHT_TOP_NAV = 150.dp
 
 @Composable
 fun SearchScreen(
@@ -171,14 +175,14 @@ fun SearchScreen(
                     drawerRequester = drawerRequester,
                     isTopNav = isTopNav,
                     hasResults = state.results.isNotEmpty() || state.discoverItems.isNotEmpty(),
-                    contentEntryRequester = if (state.query.length < 3 && state.discoverItems.isNotEmpty()) {
+                    contentEntryRequester = if (state.query.length < 2 && state.discoverItems.isNotEmpty()) {
                         discoverGridEntryRequester
                     } else null
                 )
 
                 // DISCOVER FILTERS — greyed out with fade when searching
                 if (state.discoverCatalogs.isNotEmpty()) {
-                    val isDiscoverActive = state.query.length < 3
+                    val isDiscoverActive = state.query.length < 2
                     val filterAlpha by animateFloatAsState(
                         targetValue = if (isDiscoverActive) 1f else 0.3f,
                         animationSpec = tween(durationMillis = 300),
@@ -265,11 +269,11 @@ fun SearchScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                } else if (state.results.isEmpty() && state.query.length >= 3) {
+                } else if (state.results.isEmpty() && state.query.length >= 2) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("No results for \"${state.query}\"", color = Color.White.copy(0.5f))
                     }
-                } else if (state.query.length < 3) {
+                } else if (state.query.length < 2) {
                     // DISCOVER MODE
                     if (state.discoverCatalogs.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -309,12 +313,14 @@ fun SearchScreen(
                         )
                     }
                 } else {
+                    val posterWidth = if (isTopNav) RESULT_POSTER_WIDTH_TOP_NAV else RESULT_POSTER_WIDTH
+                    val posterHeight = if (isTopNav) RESULT_POSTER_HEIGHT_TOP_NAV else RESULT_POSTER_HEIGHT
                     // Results: static layout, two category rows that fill the space
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = searchBarHeight + 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                            .padding(top = searchBarHeight + 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // ═══════════════════════════════════════
                         // MOVIES SECTION
@@ -327,11 +333,11 @@ fun SearchScreen(
                                         fontWeight = FontWeight.SemiBold
                                     ),
                                     color = Color.White.copy(0.9f),
-                                    modifier = Modifier.padding(bottom = 12.dp)
+                                    modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )
 
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().weight(1f),
+                                    modifier = Modifier.fillMaxWidth().padding(top = if (isTopNav) 6.dp else 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     val blockUp = Modifier.onPreviewKeyEvent { event ->
@@ -349,8 +355,8 @@ fun SearchScreen(
                                             onClick = { onMovieClick(movie) },
                                             isWatched = movie.type == "movie" && movie.id in watchedIds,
                                             modifier = Modifier
-                                                .weight(1f)
-                                                .aspectRatio(2f / 3f)
+                                                .width(posterWidth)
+                                                .height(posterHeight)
                                                 .then(blockUp)
                                                 .onFocusChanged { if (it.isFocused) onFocusedIdChange(movie.id) }
                                                 .then(if (shouldAttachRequester) Modifier.focusRequester(resultsRequester) else Modifier)
@@ -361,7 +367,8 @@ fun SearchScreen(
                                     ViewMoreCard(
                                         onClick = { onViewMore("Movies", state.movies) },
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .width(posterWidth)
+                                            .height(posterHeight)
                                             .then(blockUp)
                                             .focusRequester(moviesViewMoreRequester)
                                             .onFocusChanged { if (it.isFocused) onFocusedIdChange("viewmore_movies") }
@@ -381,11 +388,11 @@ fun SearchScreen(
                                         fontWeight = FontWeight.SemiBold
                                     ),
                                     color = Color.White.copy(0.9f),
-                                    modifier = Modifier.padding(bottom = 12.dp)
+                                    modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )
 
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().weight(1f),
+                                    modifier = Modifier.fillMaxWidth().padding(top = if (isTopNav) 6.dp else 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     val seriesPreview = state.series.take(PREVIEW_COUNT)
@@ -397,8 +404,8 @@ fun SearchScreen(
                                             posterUrl = series.poster,
                                             onClick = { onMovieClick(series) },
                                             modifier = Modifier
-                                                .weight(1f)
-                                                .aspectRatio(2f / 3f)
+                                                .width(posterWidth)
+                                                .height(posterHeight)
                                                 .onFocusChanged { if (it.isFocused) onFocusedIdChange(series.id) }
                                                 .then(if (isRemembered) Modifier.focusRequester(resultsRequester) else Modifier)
                                         )
@@ -408,7 +415,8 @@ fun SearchScreen(
                                     ViewMoreCard(
                                         onClick = { onViewMore("Series", state.series) },
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .width(posterWidth)
+                                            .height(posterHeight)
                                             .focusRequester(seriesViewMoreRequester)
                                             .onFocusChanged { if (it.isFocused) onFocusedIdChange("viewmore_series") }
                                     )
