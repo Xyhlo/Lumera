@@ -177,6 +177,7 @@ fun BasePlayerScaffold(
     onEpisodeSwitchSourceSelected: ((sourceUrl: String) -> Unit)? = null,
     onEpisodeSwitchDismissed: (() -> Unit)? = null,
     torrentProgress: TorrentProgress? = null,
+    isTrailer: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val uiState by playbackController.uiState.collectAsState()
@@ -687,9 +688,9 @@ fun BasePlayerScaffold(
                 currentPositionMs = displayPositionMs,
                 durationMs = uiState.durationMs,
                 isPlaying = isPlaybackIntended,
-                showSourceControl = sources.size > 1,
-                showAudioControl = audioTracks.isNotEmpty(),
-                showSubtitleControl = subtitleTracks.isNotEmpty(),
+                showSourceControl = !isTrailer && sources.size > 1,
+                showAudioControl = !isTrailer && audioTracks.isNotEmpty(),
+                showSubtitleControl = !isTrailer && subtitleTracks.isNotEmpty(),
                 playPauseFocusRequester = playPauseFocusRequester,
                 seekBarFocusRequester = seekBarFocusRequester,
                 onPlayPause = {

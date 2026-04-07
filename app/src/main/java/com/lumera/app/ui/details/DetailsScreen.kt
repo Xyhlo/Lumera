@@ -123,6 +123,7 @@ fun DetailsScreen(
     onNavigateToCastDetail: (personId: Int, personName: String) -> Unit = { _, _ -> },
     onNavigateToStudioDetail: (entityId: Int, entityKind: String, entityName: String, sourceType: String) -> Unit = { _, _, _, _ -> },
     onTrailerClick: (youtubeKey: String, trailerName: String) -> Unit = { _, _ -> },
+    isTrailerLoading: Boolean = false,
     trailerReturnToken: Int = 0,
     viewModel: DetailsViewModel = hiltViewModel(key = "details_${type}_${id}")
 ) {
@@ -533,6 +534,15 @@ fun DetailsScreen(
                             onClick = { viewModel.toggleWatchlist() }
                         )
 
+                        val seriesTrailer = state.tmdbTrailer
+                        if (seriesTrailer != null) {
+                            ExpandableIconButton(
+                                label = "Trailer",
+                                icon = Icons.Default.PlayArrow,
+                                onClick = { onTrailerClick(seriesTrailer.key, seriesTrailer.name) }
+                            )
+                        }
+
                         if (resumePlaybackId != null) {
                             ExpandableIconButton(
                                 label = "Clear Progress",
@@ -570,6 +580,15 @@ fun DetailsScreen(
                             onClick = { viewModel.toggleWatchlist() }
                         )
 
+                        val movieTrailer = state.tmdbTrailer
+                        if (movieTrailer != null) {
+                            ExpandableIconButton(
+                                label = "Trailer",
+                                icon = Icons.Default.PlayArrow,
+                                onClick = { onTrailerClick(movieTrailer.key, movieTrailer.name) }
+                            )
+                        }
+
                         if (resumePlaybackId != null) {
                             ExpandableIconButton(
                                 label = "Clear Progress",
@@ -601,7 +620,6 @@ fun DetailsScreen(
                 val writerMembers = enrichment?.writerMembers.orEmpty()
                 val companies = enrichment?.productionCompanies.orEmpty()
                 val networks = enrichment?.networks.orEmpty()
-                val tmdbVideos = state.tmdbVideos
                 val tmdbRecommendations = state.tmdbRecommendations
                 val tmdbCollection = state.tmdbCollection
 
@@ -636,24 +654,7 @@ fun DetailsScreen(
                     }
                 }
 
-                if (tmdbVideos.isNotEmpty()) {
-                    item(key = "tmdb_trailers") {
-                        Column(modifier = firstSectionModifier().padding(top = 28.dp)) {
-                            SectionHeader("Trailers", textColor, Modifier.padding(start = 48.dp))
-                            Spacer(modifier = Modifier.height(10.dp))
-                            TrailerRow(
-                                tmdbVideos, accentColor, textColor,
-                                onTrailerClick = { key, name, index ->
-                                    restoreRowKey = "tmdb_trailers"
-                                    restoreIndex = index
-                                    onTrailerClick(key, name)
-                                },
-                                restoreIndex = if (restoreRowKey == "tmdb_trailers") restoreIndex else -1,
-                                restoreFocusRequester = if (restoreRowKey == "tmdb_trailers") restoreFocusRequester else null
-                            )
-                        }
-                    }
-                }
+
 
                 val networkCompanies = networks.map { TmdbCompanyInfo(name = it.name, logo = it.logo, tmdbId = it.tmdbId) }
                 val isTvShow = type == "series"
@@ -793,7 +794,7 @@ fun DetailsScreen(
         )
 
         // Centered loading spinner for auto-resolve paths (remembered source, auto-select)
-        if (state.isLoadingStreams && sidebarState is SidebarState.Closed) {
+        if ((state.isLoadingStreams && sidebarState is SidebarState.Closed) || isTrailerLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = accentColor)
             }
@@ -1194,106 +1195,6 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color,
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun TrailerRow(
-    videos: List<TmdbVideoInfo>,
-    accentColor: Color,
-    textColor: Color,
-    onTrailerClick: (key: String, name: String, index: Int) -> Unit = { _, _, _ -> },
-    restoreIndex: Int = -1,
-    restoreFocusRequester: FocusRequester? = null
-) {
-    val rowState = rememberLazyListState()
-    val density = LocalDensity.current
-    val startPad = 48.dp
-    val paddingPx = remember(density) { with(density) { startPad.toPx() } }
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val endPadding = (screenWidth - startPad - 190.dp).coerceAtLeast(120.dp)
-
-    val pivotSpec = remember(paddingPx) {
-        FocusPivotSpec(
-            customOffset = paddingPx,
-            stiffnessProvider = { Spring.StiffnessLow }
-        )
-    }
-
-    CompositionLocalProvider(LocalBringIntoViewSpec provides pivotSpec) {
-        LazyRow(
-            state = rowState,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(start = startPad, end = endPadding)
-        ) {
-            itemsIndexed(videos.take(6), key = { _, it -> it.key }) { index, video ->
-                Box(modifier = Modifier.onPreviewKeyEvent {
-                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionLeft && index == 0) true else false
-                }) {
-                    TrailerCard(
-                        video, accentColor, textColor,
-                        modifier = if (restoreFocusRequester != null && index == restoreIndex) Modifier.focusRequester(restoreFocusRequester) else Modifier
-                    ) { onTrailerClick(video.key, video.name, index) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TrailerCard(video: TmdbVideoInfo, accentColor: Color, textColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
-    val cardShape = RoundedCornerShape(10.dp)
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "trailerScale")
-
-    Column(
-        modifier = modifier
-            .width(190.dp)
-            .scale(scale)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-            .focusable(interactionSource = interactionSource)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(107.dp)
-                .clip(cardShape)
-                .background(Color.White.copy(0.06f))
-                .border(
-                    width = if (isFocused) 2.dp else 0.dp,
-                    color = if (isFocused) accentColor else Color.Transparent,
-                    shape = cardShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            AsyncImage(
-                model = video.thumbnail,
-                contentDescription = video.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(cardShape)
-            )
-            // Play icon overlay
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = Color.White.copy(0.9f),
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(0.5f))
-                    .padding(4.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = video.name,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-            color = if (isFocused) Color.White else textColor.copy(alpha = 0.7f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

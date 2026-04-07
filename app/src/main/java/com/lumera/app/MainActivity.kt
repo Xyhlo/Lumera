@@ -864,6 +864,7 @@ class MainActivity : ComponentActivity() {
             var selectedAddonBaseUrl by rememberSaveable { mutableStateOf<String?>(null) }
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
             var trailerReturnToken by rememberSaveable { mutableStateOf(0) }
+            var isTrailerLoading by remember { mutableStateOf(false) }
             var selectedPlaybackId by rememberSaveable { mutableStateOf("") }
             var selectedPlaybackType by rememberSaveable { mutableStateOf("movie") }
             var selectedPlaybackTitle by rememberSaveable { mutableStateOf("") }
@@ -1570,10 +1571,13 @@ class MainActivity : ComponentActivity() {
                                             detailsNavController.navigate(route)
                                         },
                                         trailerReturnToken = trailerReturnToken,
+                                        isTrailerLoading = isTrailerLoading,
                                         onTrailerClick = { youtubeKey, trailerName ->
+                                            isTrailerLoading = true
                                             uiScope.launch {
                                                 val extractor = com.lumera.app.data.trailer.YouTubeExtractor()
                                                 val source = extractor.extractPlaybackSource(youtubeKey)
+                                                isTrailerLoading = false
                                                 if (source != null) {
                                                     selectedVideoUrl = source.videoUrl
                                                     selectedPlaybackId = "trailer_$youtubeKey"

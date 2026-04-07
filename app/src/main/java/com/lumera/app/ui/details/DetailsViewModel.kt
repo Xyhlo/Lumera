@@ -81,7 +81,7 @@ class DetailsViewModel @Inject constructor(
         val tmdbLoading: Boolean = false,
         val tmdbEnrichment: TmdbEnrichment? = null,
         val tmdbRecommendations: List<TmdbMetaPreview> = emptyList(),
-        val tmdbVideos: List<TmdbVideoInfo> = emptyList(),
+        val tmdbTrailer: TmdbVideoInfo? = null,
         val tmdbCollection: List<TmdbMetaPreview> = emptyList(),
         val tmdbCollectionName: String? = null
     )
@@ -181,7 +181,7 @@ class DetailsViewModel @Inject constructor(
                     availableStreams = emptyList(),
                     tmdbEnrichment = null,
                     tmdbRecommendations = emptyList(),
-                    tmdbVideos = emptyList(),
+                    tmdbTrailer = null,
                     tmdbCollection = emptyList(),
                     tmdbCollectionName = null,
                     tmdbEnabled = isTmdbEnabled,
@@ -385,11 +385,11 @@ class DetailsViewModel @Inject constructor(
                 // Fetch enrichment, recommendations, and videos in parallel
                 val enrichmentDeferred = async { tmdbMetadataService.fetchEnrichment(tmdbId, mediaType, language) }
                 val recommendationsDeferred = async { tmdbMetadataService.fetchRecommendations(tmdbId, mediaType, language) }
-                val videosDeferred = async { tmdbMetadataService.fetchVideos(tmdbId, mediaType, language) }
+                val trailerDeferred = async { tmdbMetadataService.fetchBestTrailerKey(tmdbId, mediaType, language) }
 
                 val enrichment = enrichmentDeferred.await()
                 val recommendations = recommendationsDeferred.await()
-                val videos = videosDeferred.await()
+                val trailer = trailerDeferred.await()
 
                 // Fetch collection if available (movies only)
                 val collection = if (enrichment?.collectionId != null) {
@@ -441,7 +441,7 @@ class DetailsViewModel @Inject constructor(
                     tmdbLoading = false,
                     tmdbEnrichment = enrichment,
                     tmdbRecommendations = recommendations,
-                    tmdbVideos = videos,
+                    tmdbTrailer = trailer,
                     tmdbCollection = collection,
                     tmdbCollectionName = enrichment?.collectionName,
                     episodeEnrichmentMap = episodeEnrichmentMap

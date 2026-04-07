@@ -455,6 +455,67 @@ class TmdbMetadataService @Inject constructor(
     }
 
     /**
+     * Fetch the best single trailer key (YouTube video ID) for a title.
+     * Tries the preferred language first, falls back to English.
+     * Only considers trailers and teasers, ranked by: trailer > teaser, official first, larger size, newest.
+     */
+    suspend fun fetchBestTrailerKey(
+        tmdbId: String,
+        mediaType: String,
+        language: String = "en"
+    ): TmdbVideoInfo? = withContext(Dispatchers.IO) {
+        val numericId = tmdbId.toIntOrNull() ?: return@withContext null
+        val tmdbType = if (mediaType == "tv" || mediaType == "series") "tv" else "movie"
+        val normalizedLanguage = normalizeTmdbLanguage(language)
+
+        try {
+            // Try preferred language first
+            val localizedResult = fetchAndRankTrailers(numericId, tmdbType, normalizedLanguage)
+            if (localizedResult != null) return@withContext localizedResult
+
+            // Fallback to English if different
+            if (!normalizedLanguage.equals("en", ignoreCase = true) && !normalizedLanguage.startsWith("en-")) {
+                val englishResult = fetchAndRankTrailers(numericId, tmdbType, "en-US")
+                if (englishResult != null) return@withContext englishResult
+            }
+
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch best trailer for $tmdbId: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun fetchAndRankTrailers(tmdbId: Int, tmdbType: String, language: String): TmdbVideoInfo? {
+        val response = when (tmdbType) {
+            "tv" -> tmdbApi.getTvVideos(tmdbId, apiKey, language)
+            else -> tmdbApi.getMovieVideos(tmdbId, apiKey, language)
+        }
+        val results = response.body()?.results.orEmpty()
+
+        return results
+            .filter { it.site.equals("YouTube", ignoreCase = true) && !it.key.isNullOrBlank() }
+            .filter {
+                val t = it.type?.trim()?.lowercase()
+                t == "trailer" || t == "teaser"
+            }
+            .sortedWith(
+                compareBy<TmdbVideoResult> { if (it.type.equals("Trailer", ignoreCase = true)) 0 else 1 }
+                    .thenBy { if (it.official == true) 0 else 1 }
+                    .thenByDescending { it.size ?: 0 }
+            )
+            .firstOrNull()
+            ?.let { video ->
+                TmdbVideoInfo(
+                    name = video.name ?: "Trailer",
+                    key = video.key!!,
+                    type = video.type ?: "Trailer",
+                    thumbnail = "https://img.youtube.com/vi/${video.key}/hqdefault.jpg"
+                )
+            }
+    }
+
+    /**
      * Fetch company or network detail.
      */
     suspend fun fetchEntityDetail(

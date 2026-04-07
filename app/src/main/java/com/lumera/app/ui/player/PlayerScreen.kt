@@ -278,7 +278,8 @@ fun PlayerScreen(
             episodeSwitchTitle = episodeSwitchTitle,
             onEpisodeSwitchSourceSelected = onEpisodeSwitchSourceSelected,
             onEpisodeSwitchDismissed = onEpisodeSwitchDismissed,
-            torrentProgress = torrentProgress
+            torrentProgress = torrentProgress,
+            isTrailer = movieId.startsWith("trailer_")
         )
     }
 }
