@@ -813,7 +813,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        // Sanitize saved state: R8 can obfuscate Parcelable class names, causing
+        // BadParcelableException on process-death restore. Clear the bundle if corrupt.
+        val safeState = savedInstanceState?.let { bundle ->
+            try {
+                bundle.keySet() // forces unparcel — throws if any class is missing
+                bundle
+            } catch (_: android.os.BadParcelableException) {
+                null
+            }
+        }
+        super.onCreate(safeState)
         window.setFormat(android.graphics.PixelFormat.RGBA_8888)
 
         // Fix sideload launch bug: pressing Home and returning re-creates the activity
@@ -827,7 +837,7 @@ class MainActivity : ComponentActivity() {
         val splashEnabledInProfile = profileConfigurationManager.getLastActiveProfileId()?.let { id ->
             runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
         }?.splashEnabled ?: true
-        val showSplash = splashEnabledInProfile && savedInstanceState?.getBoolean(KEY_SPLASH_SHOWN) != true
+        val showSplash = splashEnabledInProfile && safeState?.getBoolean(KEY_SPLASH_SHOWN) != true
         if (!showSplash) _splashFinished.value = true
 
         if (showSplash) {

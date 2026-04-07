@@ -266,7 +266,7 @@ fun EpisodesContent(
         ) {
             if (episodes.isEmpty()) item { Text("No episodes found.", color = Color.Gray) }
             else {
-                itemsIndexed(episodes) { index, ep ->
+                itemsIndexed(episodes, key = { _, ep -> "${ep.season}:${ep.episode}:${ep.id}" }) { index, ep ->
                     // Focus Logic: Attach requester to saved index; Attach 'Up' navigation to first index
                     val isTarget = index == (if (savedIndex in episodes.indices) savedIndex else 0)
                     val mod = Modifier
@@ -378,7 +378,7 @@ fun SourcesContent(
                         Text("No streams found.", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
                     }
                 } else {
-                    itemsIndexed(filtered) { index, s ->
+                    itemsIndexed(filtered, key = { index, s -> "${index}_${s.addonTransportUrl ?: s.url ?: index}" }) { index, s ->
                         RawSourceItem(
                             stream = s,
                             isPlaying = index == selectedIndex && selectedStreamId != null,

@@ -34,6 +34,10 @@ class AddonRepository @Inject constructor(
         @Suppress("SENSELESS_COMPARISON")
         item.id != null && item.name != null && item.type != null
     }
+    /** Validate a single MetaItem from getMeta() — returns null if Gson injected nulls */
+    @Suppress("SENSELESS_COMPARISON")
+    private fun MetaItem?.sanitize(): MetaItem? =
+        this?.takeIf { it.id != null && it.name != null && it.type != null }
     private val CATALOG_TIMEOUT_MS = 10_000L // 10 seconds per catalog request
     private val STREAM_TIMEOUT_MS = 20_000L  // 20 seconds per stream request (torrent addons need more time)
 
@@ -405,7 +409,7 @@ class AddonRepository @Inject constructor(
     fun getAddons() = dao.getAllAddons()
     suspend fun updateAddons(addons: List<AddonEntity>) = withContext(Dispatchers.IO) { dao.insertAddons(addons) }
 
-    suspend fun getMetaDetails(url: String) = withContext(Dispatchers.IO) { api.getMeta(url).meta }
+    suspend fun getMetaDetails(url: String) = withContext(Dispatchers.IO) { api.getMeta(url).meta.sanitize() }
 
     /**
      * Resolves meta details using a priority system:
@@ -427,7 +431,7 @@ class AddonRepository @Inject constructor(
         if (!preferredAddonBaseUrl.isNullOrBlank()) {
             try {
                 val url = "${preferredAddonBaseUrl.trimEnd('/')}/meta/$type/$id.json"
-                val meta = withTimeout(preferredTimeout) { api.getMeta(url) }.meta
+                val meta = withTimeout(preferredTimeout) { api.getMeta(url) }.meta.sanitize()
                 if (meta != null) return@withContext meta
             } catch (_: Exception) { /* try fallback */ }
         }
@@ -475,7 +479,7 @@ class AddonRepository @Inject constructor(
             if (addon.transportUrl == preferredAddonBaseUrl) continue
             try {
                 val url = "${addon.transportUrl}/meta/$candidateType/$id.json"
-                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
                 if (meta != null && meta.id == id) return@withContext meta
             } catch (_: Exception) { /* try next */ }
         }
@@ -483,7 +487,7 @@ class AddonRepository @Inject constructor(
         // Last resort: Cinemeta for standard types
         try {
             val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
-            return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta
+            return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
         } catch (_: Exception) { null }
     }
 
