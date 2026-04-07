@@ -970,7 +970,22 @@ class ExoPlayerBackend(
             // When pre-warmed, surface is already created — skip the yield.
             if (!playerPreWarmed) yield()
 
-            player.setMediaSource(mediaSource)
+            // If a separate audio URL is provided (YouTube adaptive streams),
+            // merge video + audio sources for high-quality playback.
+            // For YouTube adaptive streams, use chunked data source for both
+            // video and audio to prevent YouTube's download throttling.
+            val finalMediaSource = if (!request.separateAudioUrl.isNullOrBlank()) {
+                val ytSourceFactory = DefaultMediaSourceFactory(
+                    com.lumera.app.data.trailer.YoutubeChunkedDataSourceFactory()
+                )
+                val videoSource = ytSourceFactory.createMediaSource(MediaItem.fromUri(source.url))
+                val audioSource = ytSourceFactory.createMediaSource(MediaItem.fromUri(request.separateAudioUrl))
+                MergingMediaSource(videoSource, audioSource)
+            } else {
+                mediaSource
+            }
+
+            player.setMediaSource(finalMediaSource)
 
             // Defer the seek to STATE_READY instead of seeking before prepare().
             // Seeking before prepare() on large MKV forces Cues parsing before any

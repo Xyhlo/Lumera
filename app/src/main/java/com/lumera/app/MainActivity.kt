@@ -856,6 +856,7 @@ class MainActivity : ComponentActivity() {
             var selectedMovieId by rememberSaveable { mutableStateOf("") }
             var selectedMovieType by rememberSaveable { mutableStateOf("movie") }
             var selectedVideoUrl by rememberSaveable { mutableStateOf("") }
+            var selectedTrailerAudioUrl by rememberSaveable { mutableStateOf("") }
             var torrentProgress by remember { mutableStateOf<TorrentProgress?>(null) }
             var selectedMovieTitle by rememberSaveable { mutableStateOf("") }
             var selectedMoviePoster by rememberSaveable { mutableStateOf("") }
@@ -1493,6 +1494,7 @@ class MainActivity : ComponentActivity() {
                                         selectedPlaybackType = playbackType
                                         selectedPlaybackTitle = resolvedPlaybackTitle
                                         selectedPlaybackPoster = selectedMoviePoster
+                                        selectedTrailerAudioUrl = ""
                                         playerState.selectedPlayerSubtitles = subtitlePayload
                                         playerState.selectedPlayerSources = sourcePayload
                                         selectedVideoUrl = ""
@@ -1524,6 +1526,7 @@ class MainActivity : ComponentActivity() {
                                         selectedPlaybackType = playbackType
                                         selectedPlaybackTitle = resolvedPlaybackTitle
                                         selectedPlaybackPoster = selectedMoviePoster
+                                        selectedTrailerAudioUrl = ""
                                         playerState.selectedPlayerSubtitles = subtitlePayload
                                         playerState.selectedPlayerSources = sourcePayload
                                         selectedVideoUrl = url
@@ -1538,7 +1541,7 @@ class MainActivity : ComponentActivity() {
 
                             NavHost(
                                 navController = detailsNavController,
-                                startDestination = "detail_start"
+                                startDestination = "detail_start",
                             ) {
                                 composable("detail_start") { }
                                 composable(
@@ -1562,6 +1565,7 @@ class MainActivity : ComponentActivity() {
                                         resumePlaybackHint = detailResume,
                                         autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                         rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
+                                        onPosterResolved = { selectedMoviePoster = it },
                                         onPlayClick = onPlayClick,
                                         onNavigateToDetails = { navType, navId ->
                                             val route = "detail/${java.net.URLEncoder.encode(navType, "UTF-8")}/${java.net.URLEncoder.encode(navId, "UTF-8")}"
@@ -1585,6 +1589,7 @@ class MainActivity : ComponentActivity() {
                                                 isTrailerLoading = false
                                                 if (source != null) {
                                                     selectedVideoUrl = source.videoUrl
+                                                    selectedTrailerAudioUrl = source.audioUrl ?: ""
                                                     selectedPlaybackId = "trailer_$youtubeKey"
                                                     selectedPlaybackType = selectedMovieType
                                                     selectedPlaybackTitle = trailerName
@@ -1710,6 +1715,7 @@ class MainActivity : ComponentActivity() {
 
                             PlayerScreen(
                                 videoUrl = selectedVideoUrl,
+                                trailerAudioUrl = selectedTrailerAudioUrl.takeIf { it.isNotBlank() },
                                 title = selectedPlaybackTitle.ifBlank { selectedMovieTitle },
                                 seriesTitle = selectedMovieTitle.takeIf {
                                     selectedPlaybackType.equals("series", ignoreCase = true)

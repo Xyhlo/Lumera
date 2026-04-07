@@ -43,7 +43,8 @@ data class PlayerLoadRequest(
     val sources: List<PlayerSourceOption> = emptyList(),
     val subtitles: List<PlayerSubtitleSource> = emptyList(),
     val preferredAudioTrackId: String? = null,
-    val preferredSubtitleTrackId: String? = null
+    val preferredSubtitleTrackId: String? = null,
+    val separateAudioUrl: String? = null
 )
 
 @Immutable

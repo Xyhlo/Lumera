@@ -44,6 +44,7 @@ data class PlayerSessionResult(
 @Composable
 fun PlayerScreen(
     videoUrl: String,
+    trailerAudioUrl: String? = null,
     title: String,
     seriesTitle: String? = null,
     logoUrl: String? = null,
@@ -192,7 +193,8 @@ fun PlayerScreen(
                 sources = sources,
                 subtitles = subtitles,
                 preferredAudioTrackId = preferredAudioTrackId,
-                preferredSubtitleTrackId = preferredSubtitleTrackId
+                preferredSubtitleTrackId = preferredSubtitleTrackId,
+                separateAudioUrl = trailerAudioUrl
             )
         )
         playbackController.setSubtitleVerticalOffset(playbackSettings.subtitleOffset)

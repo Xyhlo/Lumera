@@ -221,21 +221,16 @@ class YouTubeExtractor @Inject constructor() {
         val bestVideo = pickBestForClient(adaptiveVideo, PREFERRED_SEPARATE_CLIENT)
         val bestAudio = pickBestForClient(adaptiveAudio, PREFERRED_SEPARATE_CLIENT)
 
-        // Prefer progressive over HLS — YouTube HLS manifests can cause
-        // ExoPlayer track selection crashes (ArrayIndexOutOfBoundsException)
-        val combinedUrl = bestProgressive?.url
-            ?: bestManifest?.manifestUrl
-
-        // Prefer combined (progressive/HLS) which has audio built-in.
-        // Only use adaptive video+audio split if no combined source available.
+        // Prefer adaptive video+audio (highest quality) with MergingMediaSource.
+        // Fall back to progressive (combined but lower quality) if no adaptive available.
         val videoUrl: String
         val audioUrl: String?
-        if (combinedUrl != null) {
-            videoUrl = resolveReachableUrl(combinedUrl)
-            audioUrl = null
-        } else if (bestVideo != null) {
+        if (bestVideo != null && bestAudio != null) {
             videoUrl = resolveReachableUrl(bestVideo.url)
-            audioUrl = bestAudio?.url?.let { resolveReachableUrl(it) }
+            audioUrl = resolveReachableUrl(bestAudio.url)
+        } else if (bestProgressive != null) {
+            videoUrl = resolveReachableUrl(bestProgressive.url)
+            audioUrl = null
         } else {
             return null
         }

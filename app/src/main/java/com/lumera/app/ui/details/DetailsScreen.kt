@@ -56,7 +56,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -125,6 +124,7 @@ fun DetailsScreen(
     onNavigateToDetails: (type: String, id: String) -> Unit = { _, _ -> },
     onNavigateToCastDetail: (personId: Int, personName: String) -> Unit = { _, _ -> },
     onNavigateToStudioDetail: (entityId: Int, entityKind: String, entityName: String, sourceType: String) -> Unit = { _, _, _, _ -> },
+    onPosterResolved: (poster: String) -> Unit = {},
     onTrailerClick: (youtubeKey: String, trailerName: String) -> Unit = { _, _ -> },
     isTrailerLoading: Boolean = false,
     trailerReturnToken: Int = 0,
@@ -139,6 +139,12 @@ fun DetailsScreen(
     // contentKey is set when meta loads and matches "$type:$id" of the navigation params.
     val isCurrentMovie = movie != null && !state.isLoading && state.contentKey == "$type:$id"
     val showMovieContent = isCurrentMovie
+
+    LaunchedEffect(showMovieContent) {
+        if (showMovieContent) {
+            movie?.poster?.let { onPosterResolved(it) }
+        }
+    }
     val sidebarState = if (isCurrentMovie) state.sidebarState else SidebarState.Closed
 
     val accentColor = MaterialTheme.colorScheme.primary
@@ -639,7 +645,12 @@ fun DetailsScreen(
                 fun firstSectionModifier(): Modifier {
                     if (firstSectionClaimed) return Modifier
                     firstSectionClaimed = true
-                    return Modifier.focusProperties { up = firstButtonFocusRequester }
+                    return Modifier.onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                            firstButtonFocusRequester.requestFocus()
+                            true
+                        } else false
+                    }
                 }
 
                 if (castMembers.isNotEmpty() || leadingCrew.isNotEmpty()) {
