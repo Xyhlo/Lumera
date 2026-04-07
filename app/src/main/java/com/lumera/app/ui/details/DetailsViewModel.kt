@@ -21,6 +21,7 @@ import com.lumera.app.data.tmdb.TmdbMetadataService
 import com.lumera.app.data.tmdb.TmdbService
 import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
+import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.data.trakt.TraktSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.SeriesNextUpEntity
@@ -102,6 +103,12 @@ class DetailsViewModel @Inject constructor(
     private var tmdbEnrichmentJob: Job? = null
     private var loadRequestVersion: Long = 0L
     private var loadedContentKey: String? = null
+
+    // Prefetched streams cache
+    private var prefetchStreamsJob: Job? = null
+    private var prefetchedStreamKey: String? = null
+    private var prefetchedStreams: List<Stream>? = null
+    private var prefetchedSubtitles: List<AddonSubtitle>? = null
 
 
     fun loadDetails(type: String, id: String, addonBaseUrl: String? = null) {
@@ -199,6 +206,19 @@ class DetailsViewModel @Inject constructor(
                 }
                 // Fire TMDB enrichment in background (non-blocking)
                 loadTmdbEnrichment(details.type, streamFetchId, requestKey)
+
+                // Prefetch streams so they're ready when the user hits Play
+                val prefetchId = if (resumePlaybackId != null) {
+                    resumePlaybackId
+                } else if (details.type == "series") {
+                    val firstEpisode = details.videos
+                        ?.filter { it.season > 0 && it.episode > 0 }
+                        ?.minWithOrNull(compareBy<com.lumera.app.data.model.stremio.MetaVideo> { it.season }.thenBy { it.episode })
+                    firstEpisode?.let { episodeStreamId(streamFetchId, it) } ?: streamFetchId
+                } else {
+                    streamFetchId
+                }
+                prefetchStreams(details.type, prefetchId)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -556,6 +576,24 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
+    private fun prefetchStreams(type: String, id: String) {
+        prefetchStreamsJob?.cancel()
+        val key = "$type:$id"
+        prefetchedStreamKey = key
+        prefetchedStreams = null
+        prefetchedSubtitles = null
+        prefetchStreamsJob = viewModelScope.launch {
+            try {
+                val streamsDeferred = async { repository.getStreams(type, id) }
+                val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                prefetchedStreams = streamsDeferred.await()
+                prefetchedSubtitles = subtitlesDeferred.await()
+            } catch (_: Exception) {
+                // Prefetch failed silently — loadStreams will fetch fresh
+            }
+        }
+    }
+
     // 2. Open Sources (Movie OR Specific Episode)
     fun loadStreams(
         type: String,
@@ -584,11 +622,27 @@ class DetailsViewModel @Inject constructor(
             )
 
             try {
-                val streamsDeferred = async { repository.getStreams(type, id) }
-                val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                val rawStreams: List<Stream>
+                val addonSubtitles: List<AddonSubtitle>
+                val prefetchKey = "$type:$id"
 
-                val rawStreams = streamsDeferred.await()
-                val addonSubtitles = subtitlesDeferred.await()
+                if (prefetchedStreamKey == prefetchKey) {
+                    prefetchStreamsJob?.join()
+                    if (prefetchedStreams != null) {
+                        rawStreams = prefetchedStreams!!
+                        addonSubtitles = prefetchedSubtitles ?: emptyList()
+                    } else {
+                        val streamsDeferred = async { repository.getStreams(type, id) }
+                        val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                        rawStreams = streamsDeferred.await()
+                        addonSubtitles = subtitlesDeferred.await()
+                    }
+                } else {
+                    val streamsDeferred = async { repository.getStreams(type, id) }
+                    val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                    rawStreams = streamsDeferred.await()
+                    addonSubtitles = subtitlesDeferred.await()
+                }
 
                 // Read sorting preferences from the active profile
                 val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
