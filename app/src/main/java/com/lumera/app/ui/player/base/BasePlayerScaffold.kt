@@ -206,7 +206,7 @@ fun BasePlayerScaffold(
     var hideControlsSignal by remember { mutableIntStateOf(0) }
     var hideSeekOverlaySignal by remember { mutableIntStateOf(0) }
     var interactionSignal by remember { mutableIntStateOf(0) }
-    var backHideArmed by remember { mutableStateOf(false) }
+
     var consumeNextBackHandler by remember { mutableStateOf(false) }
 
     val hasError = !uiState.errorMessage.isNullOrBlank()
@@ -339,7 +339,6 @@ fun BasePlayerScaffold(
     fun markInteraction() {
         interactionSignal++
         showPauseOverlay = false
-        backHideArmed = false
     }
 
     fun scheduleHideControls() {
@@ -403,7 +402,6 @@ fun BasePlayerScaffold(
                 markInteraction()
                 showControls = false
                 showSeekOverlay = false
-                backHideArmed = true
             }
             overlayVisible -> {
                 autoplayCancelled = true
@@ -411,15 +409,7 @@ fun BasePlayerScaffold(
                 showControls = true
                 scheduleHideControls()
             }
-            !isPlaybackIntended -> onBack()
-            backHideArmed && !showSkipIntro && !showPlayNextButton -> onBack()
-            else -> {
-                markInteraction()
-                showControls = true
-                showSeekOverlay = false
-                backHideArmed = false
-                scheduleHideControls()
-            }
+            else -> onBack()
         }
     }
 
