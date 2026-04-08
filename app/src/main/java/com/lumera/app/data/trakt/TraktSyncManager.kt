@@ -538,11 +538,16 @@ class TraktSyncManager @Inject constructor(
                         val existing = dao.getSeriesNextUp(imdbId)
                         if (nextEp != null) {
                             val airDate = nextEp.firstAired?.take(10)
-                            // Preserve existing poster and timestamp if next episode unchanged
                             val unchanged = existing != null &&
                                 !existing.isComplete &&
                                 existing.nextSeason == nextEp.season &&
                                 existing.nextEpisode == nextEp.number
+                            val revived = existing?.isComplete == true
+                            val badgeState = when {
+                                revived -> true
+                                unchanged -> existing?.isNewEpisode ?: false
+                                else -> false
+                            }
 
                             dao.upsertSeriesNextUp(
                                 SeriesNextUpEntity(
@@ -554,6 +559,7 @@ class TraktSyncManager @Inject constructor(
                                     nextEpisodeTitle = nextEp.title,
                                     nextReleased = airDate,
                                     isComplete = false,
+                                    isNewEpisode = badgeState,
                                     updatedAt = if (unchanged) existing.updatedAt else System.currentTimeMillis()
                                 )
                             )

@@ -364,6 +364,15 @@ class DetailsViewModel @Inject constructor(
                 !existing.isComplete &&
                 existing.nextSeason == nextEpisode.season &&
                 existing.nextEpisode == nextEpisode.episode
+            // Badge: set when show was complete and now has a new episode
+            // Keep if unchanged (user hasn't watched the new ep yet)
+            // Clear once user watches the episode (next computeAndStoreNextUp will have a different next ep)
+            val revived = existing?.isComplete == true
+            val badgeState = when {
+                revived -> true
+                unchanged -> existing?.isNewEpisode ?: false
+                else -> false
+            }
             dao.upsertSeriesNextUp(
                 SeriesNextUpEntity(
                     seriesId = seriesId,
@@ -374,6 +383,7 @@ class DetailsViewModel @Inject constructor(
                     nextEpisodeTitle = epTitle,
                     nextReleased = nextEpisode.released?.take(10),
                     isComplete = false,
+                    isNewEpisode = badgeState,
                     updatedAt = if (unchanged) existing.updatedAt else System.currentTimeMillis()
                 )
             )

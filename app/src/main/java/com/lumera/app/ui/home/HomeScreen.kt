@@ -806,18 +806,23 @@ private fun buildContinueWatchingItems(
     val today = java.time.LocalDate.now().toString() // "2026-04-06"
     for (nextUp in seriesNextUp) {
         if (nextUp.seriesId in seriesIdsIncluded) continue // already shown as in-progress
-        if (nextUp.isComplete) continue
 
         // Check if the next episode has aired (null = assume aired)
         val released = nextUp.nextReleased
         if (released != null && released > today) continue
+
+        // Complete with no next episode date = truly done, skip
+        if (nextUp.isComplete && released == null) continue
+
+        // +1 badge: show was complete (user was caught up) and episode has now aired
+        val isReturning = nextUp.isComplete || nextUp.isNewEpisode
 
         result.add(MetaItem(
             id = nextUp.seriesId,
             type = "series",
             name = nextUp.title,
             poster = nextUp.poster,
-            hasNewEpisode = true
+            hasNewEpisode = isReturning
         ))
     }
 
