@@ -353,7 +353,7 @@ fun SearchScreen(
                                             title = movie.name,
                                             posterUrl = movie.poster,
                                             onClick = { onMovieClick(movie) },
-                                            isWatched = movie.type == "movie" && movie.id in watchedIds,
+                                            isWatched = movie.id in watchedIds,
                                             modifier = Modifier
                                                 .width(posterWidth)
                                                 .height(posterHeight)
@@ -700,7 +700,7 @@ private fun DiscoverGrid(
                     title = item.name,
                     posterUrl = item.poster,
                     onClick = { onItemClick(item) },
-                    isWatched = item.type == "movie" && item.id in watchedIds,
+                    isWatched = item.id in watchedIds,
                     modifier = Modifier
                         .aspectRatio(2f / 3f)
                         .onPreviewKeyEvent { keyEvent ->
