@@ -228,6 +228,9 @@ interface AddonDao {
     @Query("SELECT id FROM watch_history WHERE watched = 1")
     fun getWatchedIds(): Flow<List<String>>
 
+    @Query("UPDATE watch_history SET poster = :poster, background = :background, logo = :logo WHERE id = :id")
+    suspend fun updateHistoryImages(id: String, poster: String?, background: String?, logo: String?)
+
     // ── Series Next Up ──
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

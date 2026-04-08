@@ -255,7 +255,14 @@ fun CinematicLayout(
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
     // Cache the history items transformation to avoid allocating new list on every recomposition
-    val historyItems = remember(state.history, state.seriesNextUp) {
+    // Stable key: only rebuild when items/order/watched-state change, not when images update
+    val historyKey = remember(state.history) {
+        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}" }
+    }
+    val nextUpKey = remember(state.seriesNextUp) {
+        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}" }
+    }
+    val historyItems = remember(historyKey, nextUpKey) {
         buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 
@@ -745,7 +752,7 @@ private fun buildContinueWatchingItems(
     history: List<WatchHistoryEntity>,
     seriesNextUp: List<com.lumera.app.data.model.SeriesNextUpEntity> = emptyList()
 ): List<MetaItem> {
-    val result = mutableListOf<MetaItem>()
+    val result = mutableListOf<Pair<Long, MetaItem>>()
     val seriesIdsIncluded = mutableSetOf<String>()
 
     // 1. In-progress items (partially watched, not completed)
@@ -777,7 +784,7 @@ private fun buildContinueWatchingItems(
             val chosen = chosenSeries[canonicalId] ?: return@forEach
             if (chosen.id != entry.id) return@forEach
             seriesIdsIncluded.add(canonicalId)
-            result.add(MetaItem(
+            result.add(chosen.lastWatched to MetaItem(
                 id = canonicalId,
                 type = entry.type,
                 name = entry.title,
@@ -789,7 +796,7 @@ private fun buildContinueWatchingItems(
         } else {
             val chosen = movieById[entry.id] ?: return@forEach
             if (chosen.id != entry.id) return@forEach
-            result.add(MetaItem(
+            result.add(entry.lastWatched to MetaItem(
                 id = entry.id,
                 type = entry.type,
                 name = entry.title,
@@ -817,7 +824,7 @@ private fun buildContinueWatchingItems(
         // +1 badge: show was complete (user was caught up) and episode has now aired
         val isReturning = nextUp.isComplete || nextUp.isNewEpisode
 
-        result.add(MetaItem(
+        result.add(nextUp.updatedAt to MetaItem(
             id = nextUp.seriesId,
             type = "series",
             name = nextUp.title,
@@ -826,7 +833,8 @@ private fun buildContinueWatchingItems(
         ))
     }
 
-    return result
+    // Sort all items by most recent activity
+    return result.sortedByDescending { it.first }.map { it.second }
 }
 
 private fun canonicalSeriesId(playbackId: String): String {
@@ -893,7 +901,14 @@ fun SimpleLayout(
     isLandscapeContinueWatching: Boolean = false
 ) {
     var hasRequestedFocus by remember { mutableStateOf(false) }
-    val historyItems = remember(state.history, state.seriesNextUp) {
+    // Stable key: only rebuild when items/order/watched-state change, not when images update
+    val historyKey = remember(state.history) {
+        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}" }
+    }
+    val nextUpKey = remember(state.seriesNextUp) {
+        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}" }
+    }
+    val historyItems = remember(historyKey, nextUpKey) {
         buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 

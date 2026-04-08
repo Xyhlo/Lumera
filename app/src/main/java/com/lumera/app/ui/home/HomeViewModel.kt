@@ -301,11 +301,12 @@ class HomeViewModel @Inject constructor(
                         val needsBackground = historyItem.background.isNullOrBlank() && !fallback.background.isNullOrBlank()
                         val needsLogo = historyItem.logo.isNullOrBlank() && !fallback.logo.isNullOrBlank()
                         if (needsPoster || needsBackground || needsLogo) {
-                            dao.upsertHistory(historyItem.copy(
+                            dao.updateHistoryImages(
+                                id = historyItem.id,
                                 poster = if (needsPoster) fallback.poster else historyItem.poster,
                                 background = if (needsBackground) fallback.background else historyItem.background,
                                 logo = if (needsLogo) fallback.logo else historyItem.logo
-                            ))
+                            )
                         }
                     }
                     // Also update series next-up poster if missing
