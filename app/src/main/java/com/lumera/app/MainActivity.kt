@@ -1103,6 +1103,7 @@ class MainActivity : ComponentActivity() {
                                         onLogout = {
                                             sessionProfileId = null
                                             sessionRestoreAttemptedProfileId = null
+
                                             activeView = "menu"
                                             themeManager.resetTheme()
                                             mainViewModel.logout()
@@ -1212,10 +1213,12 @@ class MainActivity : ComponentActivity() {
                                                     mainViewModel.logout()
                                                 }
                                                 NavDestination.Watchlist -> {
+                                                    val watchlistHomeVm = hiltViewModel<HomeViewModel>()
                                                     WatchlistScreen(
                                                         currentProfile = currentProfile,
                                                         entryRequester = watchlistEntryRequester,
                                                         drawerRequester = drawerRequesters[NavDestination.Watchlist]!!,
+                                                        watchedIds = watchlistHomeVm.state.collectAsState().value.watchedIds,
                                                         onMovieClick = { movie ->
                                                             selectedMovieId = movie.id
                                                             selectedMovieType = movie.type
@@ -1363,10 +1366,12 @@ class MainActivity : ComponentActivity() {
                                                     mainViewModel.logout()
                                                 }
                                                 NavDestination.Watchlist -> {
+                                                    val watchlistHomeVm = hiltViewModel<HomeViewModel>()
                                                     WatchlistScreen(
                                                         currentProfile = currentProfile,
                                                         entryRequester = watchlistEntryRequester,
                                                         drawerRequester = drawerRequesters[NavDestination.Watchlist]!!,
+                                                        watchedIds = watchlistHomeVm.state.collectAsState().value.watchedIds,
                                                         onMovieClick = { movie ->
                                                             selectedMovieId = movie.id
                                                             selectedMovieType = movie.type

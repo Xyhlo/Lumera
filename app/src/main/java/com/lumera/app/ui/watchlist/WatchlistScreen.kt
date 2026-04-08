@@ -33,6 +33,7 @@ fun WatchlistScreen(
     entryRequester: FocusRequester,
     drawerRequester: FocusRequester,
     onMovieClick: (MetaItem) -> Unit,
+    watchedIds: Set<String> = emptySet(),
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
     val movies by viewModel.movieItems.collectAsState()
@@ -83,6 +84,7 @@ fun WatchlistScreen(
     val startPadding = if (isTopNav) 50.dp else 120.dp
     val topPadding = if (isTopNav) 24.dp else 16.dp
 
+    androidx.compose.runtime.CompositionLocalProvider(com.lumera.app.ui.components.LocalWatchedIds provides watchedIds) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (movies.isEmpty() && series.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -153,4 +155,5 @@ fun WatchlistScreen(
             }
         }
     }
+    } // CompositionLocalProvider
 }
