@@ -70,6 +70,7 @@ fun LumeraLandscapeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     progress: Float = 0f,
+    hasNewEpisode: Boolean = false,
     onFocused: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -201,6 +202,24 @@ fun LumeraLandscapeCard(
                             color = Color.White,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // New episode badge
+                if (hasNewEpisode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        androidx.compose.material3.Text(
+                            "+1",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
                     }
                 }

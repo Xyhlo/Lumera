@@ -426,6 +426,7 @@ private fun LinearContent(
                         posterUrl = item.poster,
                         onClick = { onMovieClick(item) },
                         progress = item.progress,
+                        hasNewEpisode = item.hasNewEpisode,
                         onFocused = {
                             ImagePrefetcher.prefetchAroundLandscape(context, imageUrls, index)
                             onFocused(item, uniqueKey)
@@ -444,6 +445,7 @@ private fun LinearContent(
                         onClick = { onMovieClick(item) },
                         progress = item.progress,
                         isWatched = item.type == "movie" && item.id in watchedIds,
+                        hasNewEpisode = item.hasNewEpisode,
                         onFocused = {
                             ImagePrefetcher.prefetchAround(context, imageUrls, index)
                             onFocused(item, uniqueKey)

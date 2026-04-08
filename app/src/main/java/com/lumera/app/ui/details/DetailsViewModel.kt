@@ -163,10 +163,13 @@ class DetailsViewModel @Inject constructor(
                     if (latest != null && !latest.watched) {
                         latest.id // In-progress episode — resume it
                     } else {
-                        // All episodes watched or no history — use next-up
+                        // All episodes watched or no history — use next-up if aired
                         val nextUp = dao.getSeriesNextUp(streamFetchId)
-                        if (nextUp != null && !nextUp.isComplete) {
-                            "${streamFetchId}:${nextUp.nextSeason}:${nextUp.nextEpisode}"
+                        val today = java.time.LocalDate.now().toString()
+                        val hasAired = nextUp != null && !nextUp.isComplete &&
+                            (nextUp.nextReleased == null || nextUp.nextReleased <= today)
+                        if (hasAired) {
+                            "${streamFetchId}:${nextUp!!.nextSeason}:${nextUp.nextEpisode}"
                         } else null
                     }
                 } else {
@@ -251,8 +254,11 @@ class DetailsViewModel @Inject constructor(
                     latest.id
                 } else {
                     val nextUp = dao.getSeriesNextUp(meta.id)
-                    if (nextUp != null && !nextUp.isComplete) {
-                        "${meta.id}:${nextUp.nextSeason}:${nextUp.nextEpisode}"
+                    val today = java.time.LocalDate.now().toString()
+                    val hasAired = nextUp != null && !nextUp.isComplete &&
+                        (nextUp.nextReleased == null || nextUp.nextReleased <= today)
+                    if (hasAired) {
+                        "${meta.id}:${nextUp!!.nextSeason}:${nextUp.nextEpisode}"
                     } else null
                 }
             } else {
@@ -372,6 +378,8 @@ class DetailsViewModel @Inject constructor(
                 )
             )
         } else {
+            // All local episodes watched — mark as complete locally.
+            // If Trakt knows about a future episode, syncSeriesNextUp will correct this.
             val alreadyComplete = existing?.isComplete == true
             dao.upsertSeriesNextUp(
                 SeriesNextUpEntity(

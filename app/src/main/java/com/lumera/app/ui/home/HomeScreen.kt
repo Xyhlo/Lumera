@@ -808,15 +808,16 @@ private fun buildContinueWatchingItems(
         if (nextUp.seriesId in seriesIdsIncluded) continue // already shown as in-progress
         if (nextUp.isComplete) continue
 
-        // Check if the next episode has aired
+        // Check if the next episode has aired (null = assume aired)
         val released = nextUp.nextReleased
-        if (released != null && released > today) continue // not yet aired
+        if (released != null && released > today) continue
 
         result.add(MetaItem(
             id = nextUp.seriesId,
             type = "series",
             name = nextUp.title,
-            poster = nextUp.poster
+            poster = nextUp.poster,
+            hasNewEpisode = true
         ))
     }
 

@@ -66,6 +66,7 @@ fun LumeraCard(
     modifier: Modifier = Modifier,
     progress: Float = 0f,
     isWatched: Boolean = false,
+    hasNewEpisode: Boolean = false,
     onFocused: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -159,6 +160,24 @@ fun LumeraCard(
                             .align(Alignment.TopEnd)
                             .padding(top = 1.dp, end = 2.dp)
                     )
+                }
+
+                // New episode badge for next-up items
+                if (hasNewEpisode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            "+1",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
                 }
 
                 // Progress bar overlay for Continue Watching items
