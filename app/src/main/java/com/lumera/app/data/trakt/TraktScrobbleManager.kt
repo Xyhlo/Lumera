@@ -42,7 +42,7 @@ class TraktScrobbleManager @Inject constructor(
      * Called when playback starts or resumes.
      */
     suspend fun scrobbleStart(playbackId: String, mediaType: String, positionMs: Long, durationMs: Long) {
-        Log.d(TAG, "scrobbleStart called: id=$playbackId, type=$mediaType, pos=$positionMs, dur=$durationMs, hasToken=${shouldScrobble()}")
+        Log.d(TAG, "start: id=$playbackId, type=$mediaType")
         if (!shouldScrobble()) return
         val progress = calculateProgress(positionMs, durationMs)
         val request = buildRequest(playbackId, mediaType, progress)
@@ -67,7 +67,7 @@ class TraktScrobbleManager @Inject constructor(
      * Called when playback is paused.
      */
     suspend fun scrobblePause(playbackId: String, mediaType: String, positionMs: Long, durationMs: Long, force: Boolean = false) {
-        Log.d(TAG, "scrobblePause called: id=$playbackId, type=$mediaType, force=$force, hasToken=${shouldScrobble()}")
+        Log.d(TAG, "pause: id=$playbackId, force=$force")
         if (!shouldScrobble()) return
         if (!force && !isDebouncedOk()) { Log.d(TAG, "scrobblePause debounced"); return }
         val progress = calculateProgress(positionMs, durationMs)

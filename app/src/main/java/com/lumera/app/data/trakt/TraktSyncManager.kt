@@ -80,11 +80,13 @@ class TraktSyncManager @Inject constructor(
                     synced = true
                 }
 
-                // Check watched history changes (episodes marked as watched → update next-up)
+                // Check watched history changes (movies or episodes)
+                val moviesWatched = activities.movies?.watchedAt
                 val episodesWatched = activities.episodes?.watchedAt
-                if (episodesWatched != null && episodesWatched != lastWatchedActivity) {
-                    Log.d(TAG, "Watched activity changed: $lastWatchedActivity → $episodesWatched")
-                    lastWatchedActivity = episodesWatched
+                val watchedTimestamp = listOfNotNull(moviesWatched, episodesWatched).maxOrNull()
+                if (watchedTimestamp != null && watchedTimestamp != lastWatchedActivity) {
+                    Log.d(TAG, "Watched activity changed: $lastWatchedActivity → $watchedTimestamp")
+                    lastWatchedActivity = watchedTimestamp
                     syncSeriesNextUp()
                     synced = true
                 }
@@ -189,9 +191,7 @@ class TraktSyncManager @Inject constructor(
      * Push a single item to Trakt watchlist (called when user adds locally).
      */
     suspend fun pushAdd(item: WatchlistEntity) {
-        val token = traktAuthManager.getAccessToken()
-        Log.d(TAG, "pushAdd called: id=${item.id}, type=${item.type}, hasToken=${token != null}")
-        if (token == null) return
+        if (traktAuthManager.getAccessToken() == null) return
         withContext(Dispatchers.IO) {
             try {
                 pushToTrakt(listOf(item))
