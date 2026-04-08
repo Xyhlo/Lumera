@@ -436,7 +436,7 @@ class TraktSyncManager @Inject constructor(
                             poster = null,
                             position = estimatedPositionMs,
                             duration = estimatedDurationMs,
-                            lastWatched = System.currentTimeMillis(),
+                            lastWatched = parseIsoTimestamp(item.pausedAt),
                             type = type,
                             watched = false,
                             scrobbled = true

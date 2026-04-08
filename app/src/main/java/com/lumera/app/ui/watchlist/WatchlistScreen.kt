@@ -45,6 +45,36 @@ fun WatchlistScreen(
 
     var lastFocusedKey by remember { mutableStateOf(viewModel.lastFocusedKey) }
 
+    // Redirect focus when the focused item was removed (e.g., unwatchlisted from details)
+    LaunchedEffect(movies, series) {
+        val key = lastFocusedKey ?: return@LaunchedEffect
+        val parts = key.split("_")
+        val rowIndex = parts.getOrNull(0)?.toIntOrNull()
+        val itemId = parts.getOrNull(1)
+        if (itemId == null) return@LaunchedEffect
+
+        val items = if (rowIndex == 0) movies else series
+        val stillExists = items.any { it.id == itemId }
+        if (!stillExists && items.isNotEmpty()) {
+            // Focus the last item in the same row (closest to where the removed item was)
+            val fallbackItem = items.last()
+            val fallbackIndex = items.lastIndex
+            lastFocusedKey = "${rowIndex}_${fallbackItem.id}_$fallbackIndex"
+            viewModel.lastFocusedKey = lastFocusedKey
+        } else if (!stillExists && items.isEmpty()) {
+            // Row is now empty — focus the other row if it exists
+            val otherItems = if (rowIndex == 0) series else movies
+            if (otherItems.isNotEmpty()) {
+                val otherRow = if (rowIndex == 0) 1 else 0
+                lastFocusedKey = "${otherRow}_${otherItems.first().id}_0"
+                viewModel.lastFocusedKey = lastFocusedKey
+            } else {
+                lastFocusedKey = null
+                viewModel.lastFocusedKey = null
+            }
+        }
+    }
+
     // Resolve missing posters (e.g., items pulled from Trakt)
     LaunchedEffect(movies) { movies.forEach { viewModel.resolvePosterIfNeeded(it) } }
     LaunchedEffect(series) { series.forEach { viewModel.resolvePosterIfNeeded(it) } }
