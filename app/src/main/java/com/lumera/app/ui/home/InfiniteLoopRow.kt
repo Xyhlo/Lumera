@@ -444,7 +444,7 @@ private fun LinearContent(
                         posterUrl = item.poster,
                         onClick = { onMovieClick(item) },
                         progress = item.progress,
-                        isWatched = item.id in watchedIds,
+                        isWatched = rowIndex != -1 && item.id in watchedIds,
                         hasNewEpisode = item.hasNewEpisode,
                         onFocused = {
                             ImagePrefetcher.prefetchAround(context, imageUrls, index)
@@ -666,7 +666,7 @@ private fun InfiniteGridContent(
                             posterUrl = item.movie.poster,
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
-                            isWatched = item.movie.id in watchedIds,
+                            isWatched = rowIndex != -1 && item.movie.id in watchedIds,
                             onFocused = {
                                 currentFocusedIndex = scrollIndex
                                 val logicalIndex = scrollIndex % sectionSize
@@ -874,7 +874,7 @@ private fun FiniteGridContent(
                             posterUrl = item.movie.poster,
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
-                            isWatched = item.movie.id in watchedIds,
+                            isWatched = rowIndex != -1 && item.movie.id in watchedIds,
                             onFocused = {
                                 ImagePrefetcher.prefetchAround(context, imageUrls, index)
                                 onFocused(item.movie, uniqueKey)
