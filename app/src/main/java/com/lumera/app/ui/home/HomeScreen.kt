@@ -266,11 +266,9 @@ fun CinematicLayout(
         buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 
-    // Proactive metadata fetch for landscape continue watching cards
-    LaunchedEffect(isLandscapeContinueWatching, historyItems) {
-        if (isLandscapeContinueWatching) {
-            historyItems.take(15).forEach { item -> onPreviewItemVisible(item) }
-        }
+    // Proactive metadata fetch for continue watching cards (posters + landscape)
+    LaunchedEffect(historyItems) {
+        historyItems.take(15).forEach { item -> onPreviewItemVisible(item) }
     }
 
     // Redirect stale continue-watching focus key after progress was cleared
@@ -912,11 +910,9 @@ fun SimpleLayout(
         buildContinueWatchingItems(state.history, state.seriesNextUp)
     }
 
-    // Proactive metadata fetch for landscape continue watching cards
-    LaunchedEffect(isLandscapeContinueWatching, historyItems) {
-        if (isLandscapeContinueWatching) {
-            historyItems.take(15).forEach { item -> onHeroItemVisible(item) }
-        }
+    // Proactive metadata fetch for continue watching cards (posters + landscape)
+    LaunchedEffect(historyItems) {
+        historyItems.take(15).forEach { item -> onHeroItemVisible(item) }
     }
 
     // Redirect stale continue-watching focus key after progress was cleared
