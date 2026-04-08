@@ -665,7 +665,9 @@ fun BasePlayerScaffold(
         ) {
             PlayerHeader(
                 primaryText = headerInfo.primaryText,
-                secondaryText = headerInfo.secondaryText
+                secondaryText = headerInfo.secondaryText,
+                durationMs = uiState.durationMs,
+                positionMs = displayPositionMs
             )
         }
 
@@ -1487,7 +1489,9 @@ private fun SeekOverlay(
 @Composable
 private fun PlayerHeader(
     primaryText: String,
-    secondaryText: String?
+    secondaryText: String?,
+    durationMs: Long = 0L,
+    positionMs: Long = 0L
 ) {
     Column(
         horizontalAlignment = Alignment.End,
@@ -1507,6 +1511,18 @@ private fun PlayerHeader(
                 color = Color.White.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (durationMs > 0L) {
+            val remainingMs = (durationMs - positionMs).coerceAtLeast(0L)
+            val endTime = remember(remainingMs / 60_000) {
+                val formatter = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                formatter.format(java.util.Date(System.currentTimeMillis() + remainingMs))
+            }
+            Text(
+                text = "Ends at $endTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f)
             )
         }
     }

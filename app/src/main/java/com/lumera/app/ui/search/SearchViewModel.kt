@@ -87,7 +87,7 @@ class SearchViewModel @Inject constructor(
         _state.value = _state.value.copy(query = newQuery)
         searchJob?.cancel()
 
-        if (newQuery.length < 2) {
+        if (newQuery.length < 3) {
             _state.value = _state.value.copy(
                 results = emptyList(), movies = emptyList(),
                 series = emptyList(), isLoading = false

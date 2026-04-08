@@ -175,14 +175,14 @@ fun SearchScreen(
                     drawerRequester = drawerRequester,
                     isTopNav = isTopNav,
                     hasResults = state.results.isNotEmpty() || state.discoverItems.isNotEmpty(),
-                    contentEntryRequester = if (state.query.length < 2 && state.discoverItems.isNotEmpty()) {
+                    contentEntryRequester = if (state.query.length < 3 && state.discoverItems.isNotEmpty()) {
                         discoverGridEntryRequester
                     } else null
                 )
 
                 // DISCOVER FILTERS — greyed out with fade when searching
                 if (state.discoverCatalogs.isNotEmpty()) {
-                    val isDiscoverActive = state.query.length < 2
+                    val isDiscoverActive = state.query.length < 3
                     val filterAlpha by animateFloatAsState(
                         targetValue = if (isDiscoverActive) 1f else 0.3f,
                         animationSpec = tween(durationMillis = 300),
@@ -269,11 +269,11 @@ fun SearchScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                } else if (state.results.isEmpty() && state.query.length >= 2) {
+                } else if (state.results.isEmpty() && state.query.length >= 3) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("No results for \"${state.query}\"", color = Color.White.copy(0.5f))
                     }
-                } else if (state.query.length < 2) {
+                } else if (state.query.length < 3) {
                     // DISCOVER MODE
                     if (state.discoverCatalogs.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
