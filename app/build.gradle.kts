@@ -58,6 +58,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".test"
+            resValue("string", "app_name", "Lumera Test")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

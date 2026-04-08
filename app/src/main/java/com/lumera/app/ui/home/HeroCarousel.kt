@@ -401,6 +401,14 @@ private fun HeroMetaStrip(item: MetaItem) {
         HeroMetaDot()
         Text(text = yearLabel, style = textStyle, color = valueColor)
 
+        item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
+            HeroMetaDot()
+            val hours = mins / 60
+            val m = mins % 60
+            val display = if (hours > 0) "${hours}h ${m}m" else "${m}m"
+            Text(text = display, style = textStyle, color = valueColor)
+        }
+
         item.imdbRating?.takeIf { it.isNotBlank() }?.let { rating ->
             HeroMetaDot()
             HeroImdbBadge()

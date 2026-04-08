@@ -1341,6 +1341,14 @@ private fun HomeMetaStrip(item: MetaItem) {
         HomeMetaDot()
         Text(text = yearLabel, style = textStyle, color = valueColor)
 
+        item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
+            HomeMetaDot()
+            val hours = mins / 60
+            val m = mins % 60
+            val display = if (hours > 0) "${hours}h ${m}m" else "${m}m"
+            Text(text = display, style = textStyle, color = valueColor)
+        }
+
         item.imdbRating?.takeIf { it.isNotBlank() }?.let { rating ->
             HomeMetaDot()
             HomeImdbBadge()
