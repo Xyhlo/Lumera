@@ -476,7 +476,7 @@ class TraktSyncManager @Inject constructor(
                                     poster = null,
                                     position = 0L,
                                     duration = 0L,
-                                    lastWatched = System.currentTimeMillis(),
+                                    lastWatched = parseIsoTimestamp(watchedMovie.lastWatchedAt),
                                     type = "movie",
                                     watched = true,
                                     scrobbled = true
@@ -517,7 +517,7 @@ class TraktSyncManager @Inject constructor(
                                         poster = null,
                                         position = 0L,
                                         duration = 0L,
-                                        lastWatched = System.currentTimeMillis(),
+                                        lastWatched = parseIsoTimestamp(ep.lastWatchedAt),
                                         type = "series",
                                         watched = true,
                                         scrobbled = true
@@ -560,7 +560,7 @@ class TraktSyncManager @Inject constructor(
                                     nextReleased = airDate,
                                     isComplete = false,
                                     isNewEpisode = badgeState,
-                                    updatedAt = if (unchanged) existing.updatedAt else System.currentTimeMillis()
+                                    updatedAt = if (unchanged) existing.updatedAt else parseIsoTimestamp(show.lastWatchedAt)
                                 )
                             )
                             if (!unchanged) updated++
@@ -805,6 +805,15 @@ class TraktSyncManager @Inject constructor(
                     addedAt = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    private fun parseIsoTimestamp(iso: String?): Long {
+        if (iso == null) return System.currentTimeMillis()
+        return try {
+            java.time.Instant.parse(iso).toEpochMilli()
+        } catch (_: Exception) {
+            System.currentTimeMillis()
         }
     }
 }
