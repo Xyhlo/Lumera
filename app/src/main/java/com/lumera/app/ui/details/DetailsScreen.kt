@@ -381,6 +381,10 @@ fun DetailsScreen(
                     ?: "Unknown"
                 val yearLabel = extractPrimaryYear(currentMovie.releaseInfo)
 
+                val ageRating = enrichment?.ageRating
+                val runtimeMin = enrichment?.runtimeMinutes
+                    ?: currentMovie.runtime?.filter { it.isDigit() }?.toIntOrNull()
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -403,6 +407,30 @@ fun DetailsScreen(
                         color = textColor.copy(alpha = 0.95f)
                     )
 
+                    ageRating?.let {
+                        MetaDot(textColor)
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = textColor.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .border(1.dp, textColor.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                        )
+                    }
+
+                    runtimeMin?.let {
+                        MetaDot(textColor)
+                        val hours = it / 60
+                        val mins = it % 60
+                        val display = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+                        Text(
+                            text = display,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                            color = textColor.copy(alpha = 0.95f)
+                        )
+                    }
+
                     currentMovie.imdbRating?.takeIf { it.isNotBlank() }?.let { rating ->
                         Spacer(modifier = Modifier.width(4.dp))
                         ImdbBadge()
@@ -411,38 +439,6 @@ fun DetailsScreen(
                             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                             color = textColor.copy(alpha = 0.95f)
                         )
-                    }
-                }
-
-                // Age rating + runtime from TMDB
-                val ageRating = enrichment?.ageRating
-                val runtimeMin = enrichment?.runtimeMinutes
-                if (ageRating != null || runtimeMin != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ageRating?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = textColor.copy(alpha = 0.7f),
-                                modifier = Modifier
-                                    .border(1.dp, textColor.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 1.dp)
-                            )
-                        }
-                        runtimeMin?.let {
-                            val hours = it / 60
-                            val mins = it % 60
-                            val display = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
-                            Text(
-                                text = display,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                color = textColor.copy(alpha = 0.7f)
-                            )
-                        }
                     }
                 }
 

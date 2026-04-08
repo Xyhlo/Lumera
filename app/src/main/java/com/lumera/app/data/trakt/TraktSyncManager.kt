@@ -462,9 +462,11 @@ class TraktSyncManager @Inject constructor(
             try {
                 // Sync watched movies from Trakt
                 val moviesResponse = traktSyncApi.getWatchedMovies()
+                val traktWatchedMovieIds = mutableSetOf<String>()
                 if (moviesResponse.isSuccessful) {
                     moviesResponse.body()?.forEach { watchedMovie ->
                         val imdbId = watchedMovie.movie.ids.imdb ?: return@forEach
+                        traktWatchedMovieIds.add(imdbId)
                         val existing = dao.getHistoryItem(imdbId)
                         if (existing == null) {
                             dao.upsertHistory(
@@ -494,6 +496,7 @@ class TraktSyncManager @Inject constructor(
                 }
                 val watchedShows = showsResponse.body() ?: return@withContext
 
+                val traktWatchedEpisodeIds = mutableSetOf<String>()
                 var updated = 0
                 for (show in watchedShows) {
                     val imdbId = show.show.ids.imdb ?: continue
@@ -501,10 +504,10 @@ class TraktSyncManager @Inject constructor(
                     val showTitle = show.show.title ?: "Unknown"
 
                     // Create watched history entries for episodes marked watched on Trakt
-                    // so the episode sidebar shows checkmarks
                     show.seasons?.forEach { season ->
                         season.episodes?.forEach { ep ->
                             val playbackId = "$imdbId:${season.number}:${ep.number}"
+                            traktWatchedEpisodeIds.add(playbackId)
                             val existing = dao.getHistoryItem(playbackId)
                             if (existing == null) {
                                 dao.upsertHistory(
@@ -564,6 +567,26 @@ class TraktSyncManager @Inject constructor(
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to fetch progress for $traktSlug", e)
                     }
+                }
+
+                // Reverse sync: unmark local items no longer watched on Trakt
+                if (moviesResponse.isSuccessful && showsResponse.isSuccessful) {
+                    val localWatched = dao.getScrobbledWatchedItems()
+                    var unmarked = 0
+                    for (item in localWatched) {
+                        val normalizedId = normalizePlaybackId(item.id)
+                        val stillWatched = if (item.type == "movie") {
+                            item.id in traktWatchedMovieIds
+                        } else {
+                            normalizedId in traktWatchedEpisodeIds
+                        }
+                        if (!stillWatched) {
+                            dao.deleteHistoryItem(item.id)
+                            unmarked++
+                            Log.d(TAG, "Unmarked (removed from Trakt): ${item.title}")
+                        }
+                    }
+                    if (unmarked > 0) Log.i(TAG, "Reverse watched sync: unmarked $unmarked items")
                 }
 
                 Log.i(TAG, "Series next-up sync: updated $updated shows")
