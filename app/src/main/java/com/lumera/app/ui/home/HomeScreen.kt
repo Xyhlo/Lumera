@@ -257,10 +257,10 @@ fun CinematicLayout(
     // Cache the history items transformation to avoid allocating new list on every recomposition
     // Stable key: only rebuild when items/order/watched-state change, not when images update
     val historyKey = remember(state.history) {
-        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}" }
+        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}:${it.poster != null}" }
     }
     val nextUpKey = remember(state.seriesNextUp) {
-        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}" }
+        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}:${it.poster != null}" }
     }
     val historyItems = remember(historyKey, nextUpKey) {
         buildContinueWatchingItems(state.history, state.seriesNextUp)
@@ -901,10 +901,10 @@ fun SimpleLayout(
     var hasRequestedFocus by remember { mutableStateOf(false) }
     // Stable key: only rebuild when items/order/watched-state change, not when images update
     val historyKey = remember(state.history) {
-        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}" }
+        state.history.map { "${it.id}:${it.watched}:${it.lastWatched}:${it.poster != null}" }
     }
     val nextUpKey = remember(state.seriesNextUp) {
-        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}" }
+        state.seriesNextUp.map { "${it.seriesId}:${it.isComplete}:${it.nextSeason}:${it.nextEpisode}:${it.updatedAt}:${it.poster != null}" }
     }
     val historyItems = remember(historyKey, nextUpKey) {
         buildContinueWatchingItems(state.history, state.seriesNextUp)
