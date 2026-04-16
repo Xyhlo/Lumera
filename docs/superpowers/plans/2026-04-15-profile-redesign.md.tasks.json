@@ -1,0 +1,38 @@
+{
+  "planPath": "docs/superpowers/plans/2026-04-15-profile-redesign.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Add Cyberpunk Theme to DefaultThemes",
+      "status": "pending",
+      "description": "**Goal:** Add a new Cyberpunk built-in theme with neon cyan/dark blue palette.\n\n**Files:**\n- Modify: `app/src/main/java/com/lumera/app/ui/theme/DefaultThemes.kt`\n\n**Acceptance Criteria:**\n- Cyberpunk theme exists with id \"cyberpunk\", category \"colorful\"\n- Theme appears in the ALL list\n- getById(\"cyberpunk\") returns the Cyberpunk theme\n\n**Verify:** `./gradlew assembleDebug` → BUILD SUCCESSFUL\n\n```json:metadata\n{\"files\": [\"app/src/main/java/com/lumera/app/ui/theme/DefaultThemes.kt\"], \"verifyCommand\": \"./gradlew assembleDebug\", \"acceptanceCriteria\": [\"Cyberpunk theme with id cyberpunk exists\", \"Theme in ALL list\", \"getById returns it\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Add 80 Character Avatar Assets",
+      "status": "pending",
+      "description": "**Goal:** Add 80 character avatar WebP images to drawable resources.\n\n**Files:**\n- Create: 80 WebP files in `app/src/main/res/drawable/`\n\n**Acceptance Criteria:**\n- 80 WebP files with correct naming convention\n- ~280x280px, under 200KB each\n\n**Verify:** File count check per category\n\n```json:metadata\n{\"files\": [\"app/src/main/res/drawable/\"], \"verifyCommand\": \"ls app/src/main/res/drawable/avatar_anime_*.webp | wc -l\", \"acceptanceCriteria\": [\"80 WebP files exist\", \"Correct naming convention\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Expand ProfileAssets with Categorized Avatar Map",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Update ProfileAssets.kt with all 96 avatars organized by category.\n\n**Files:**\n- Modify: `app/src/main/java/com/lumera/app/ui/profiles/ProfileAssets.kt`\n\n**Acceptance Criteria:**\n- AVATAR_MAP has 96 entries\n- AVATAR_CATEGORIES provides ordered categories\n- Existing avatar refs still resolve\n\n**Verify:** `./gradlew assembleDebug` → BUILD SUCCESSFUL\n\n```json:metadata\n{\"files\": [\"app/src/main/java/com/lumera/app/ui/profiles/ProfileAssets.kt\"], \"verifyCommand\": \"./gradlew assembleDebug\", \"acceptanceCriteria\": [\"96 entries in AVATAR_MAP\", \"AVATAR_CATEGORIES defined\", \"Backward compatible\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Update ProfileViewModel for 2-Step Wizard",
+      "status": "pending",
+      "description": "**Goal:** Change wizard from 4 steps to 3 steps with combined name+avatar method.\n\n**Files:**\n- Modify: `app/src/main/java/com/lumera/app/ui/profiles/ProfileViewModel.kt`\n\n**Acceptance Criteria:**\n- setWizardNameAndAvatar() sets both and advances to step 2\n- Old methods removed\n\n**Verify:** `./gradlew assembleDebug` → BUILD SUCCESSFUL\n\n```json:metadata\n{\"files\": [\"app/src/main/java/com/lumera/app/ui/profiles/ProfileViewModel.kt\"], \"verifyCommand\": \"./gradlew assembleDebug\", \"acceptanceCriteria\": [\"setWizardNameAndAvatar exists\", \"Old methods removed\", \"goBackStep works\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Build Combined WizardNameAvatarStep and Update ProfileScreen",
+      "status": "pending",
+      "blockedBy": [2, 3],
+      "description": "**Goal:** Replace WelcomeView + WizardNameStep + WizardAvatarStep with WizardNameAvatarStep.\n\n**Files:**\n- Modify: `app/src/main/java/com/lumera/app/ui/profiles/ProfileScreen.kt`\n\n**Acceptance Criteria:**\n- WelcomeView removed\n- Combined name+avatar screen works\n- D-pad navigation works\n- Auto-start wizard for first-time users\n\n**Verify:** Build and test on emulator\n\n```json:metadata\n{\"files\": [\"app/src/main/java/com/lumera/app/ui/profiles/ProfileScreen.kt\"], \"verifyCommand\": \"./gradlew assembleDebug\", \"acceptanceCriteria\": [\"WelcomeView removed\", \"Combined screen works\", \"D-pad navigation\", \"Auto-start for new users\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-15T00:00:00Z"
+}
