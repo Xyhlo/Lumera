@@ -7,6 +7,7 @@ import com.lumera.app.data.model.trakt.TraktScrobbleEpisode
 import com.lumera.app.data.model.trakt.TraktScrobbleMovie
 import com.lumera.app.data.model.trakt.TraktScrobbleRequest
 import com.lumera.app.data.model.trakt.TraktScrobbleShow
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.remote.TraktSyncApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,7 +30,8 @@ import javax.inject.Singleton
 class TraktScrobbleManager @Inject constructor(
     private val traktSyncApi: TraktSyncApiService,
     private val traktAuthManager: TraktAuthManager,
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) {
     companion object {
         private const val TAG = "TraktScrobble"
@@ -116,7 +118,8 @@ class TraktScrobbleManager @Inject constructor(
 
     private suspend fun markAsScrobbled(playbackId: String) {
         scrobbledIds.add(playbackId)
-        val item = dao.getHistoryItem(playbackId)
+        val profileId = profileConfigurationManager.requireActiveProfileId()
+        val item = dao.getHistoryItem(playbackId, profileId)
         if (item != null && !item.scrobbled) {
             dao.upsertHistory(item.copy(scrobbled = true))
         }

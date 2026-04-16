@@ -12,6 +12,7 @@ import com.lumera.app.data.model.trakt.TraktSyncItem
 import com.lumera.app.data.model.trakt.TraktSyncRequest
 import com.lumera.app.data.model.trakt.TraktSyncSeason
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.remote.TraktSyncApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -25,7 +26,8 @@ import javax.inject.Singleton
 class TraktSyncManager @Inject constructor(
     private val traktSyncApi: TraktSyncApiService,
     private val traktAuthManager: TraktAuthManager,
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) {
     companion object {
         private const val TAG = "TraktSyncManager"
@@ -109,7 +111,8 @@ class TraktSyncManager @Inject constructor(
             syncMutex.withLock {
                 withContext(Dispatchers.IO) {
                     try {
-                        val localItems = dao.getWatchlistOnce()
+                        val profileId = profileConfigurationManager.requireActiveProfileId()
+                        val localItems = dao.getWatchlistOnce(profileId)
                         if (localItems.isNotEmpty()) {
                             pushToTrakt(localItems)
                             Log.d(TAG, "Initial push: ${localItems.size} items")
@@ -135,12 +138,14 @@ class TraktSyncManager @Inject constructor(
                     return@withContext Result.failure(Exception("Not connected to Trakt"))
                 }
 
+                val profileId = profileConfigurationManager.requireActiveProfileId()
+
                 // 1. Fetch Trakt watchlist
                 val traktItems = fetchAllTraktWatchlist()
                     ?: return@withContext Result.failure(Exception("Failed to fetch Trakt watchlist"))
 
                 // 2. Get local watchlist
-                val localItems = dao.getWatchlistOnce()
+                val localItems = dao.getWatchlistOnce(profileId)
 
                 // 3. Build lookup sets
                 val traktImdbIds = traktItems.mapNotNull { item ->
@@ -174,7 +179,7 @@ class TraktSyncManager @Inject constructor(
                 // can't be matched against Trakt's response. (Fix: audit #7)
                 val toRemove = localItems.filter { it.id.startsWith("tt") && it.id !in traktImdbIds }
                 for (item in toRemove) {
-                    dao.removeFromWatchlist(item.id)
+                    dao.removeFromWatchlist(item.id, profileId)
                     Log.d(TAG, "Removed ${item.title} (deleted on Trakt)")
                 }
 
@@ -318,6 +323,8 @@ class TraktSyncManager @Inject constructor(
     suspend fun syncPlaybackProgress() {
         withContext(Dispatchers.IO) {
             try {
+                val profileId = profileConfigurationManager.requireActiveProfileId()
+
                 // 1. Fetch Trakt playback progress
                 val playbackResponse = traktSyncApi.getPlaybackProgress()
                 if (!playbackResponse.isSuccessful) {
@@ -346,7 +353,7 @@ class TraktSyncManager @Inject constructor(
                 val watchedData = fetchWatchedData()
 
                 // 4. Process local scrobbled in-progress items
-                val scrobbledItems = dao.getScrobbledInProgressItems()
+                val scrobbledItems = dao.getScrobbledInProgressItems(profileId)
                 var removed = 0
                 var markedWatched = 0
 
@@ -388,7 +395,7 @@ class TraktSyncManager @Inject constructor(
                         Log.d(TAG, "Marked watched (finished elsewhere): ${local.title}")
                     } else {
                         // Not on playback, not on watched → user cleared it on Trakt
-                        dao.deleteHistoryItem(local.id)
+                        dao.deleteHistoryItem(local.id, profileId)
                         removed++
                         Log.d(TAG, "Removed (cleared on Trakt): ${local.title}")
                     }
@@ -403,10 +410,10 @@ class TraktSyncManager @Inject constructor(
                     val type = if (item.type == "movie") "movie" else "series"
 
                     // Don't overwrite existing local progress (check both exact and with stream index)
-                    val existing = dao.getHistoryItem(id)
+                    val existing = dao.getHistoryItem(id, profileId)
                     if (existing != null) continue
                     if (type == "series") {
-                        val hasLocal = dao.getLatestSeriesEpisodeHistory("$id:%") != null
+                        val hasLocal = dao.getLatestSeriesEpisodeHistory("$id:%", profileId) != null
                         if (hasLocal) continue
                     }
 
@@ -432,6 +439,7 @@ class TraktSyncManager @Inject constructor(
                     dao.upsertHistory(
                         WatchHistoryEntity(
                             id = id,
+                            profileId = profileId,
                             title = title,
                             poster = null,
                             position = estimatedPositionMs,
@@ -460,6 +468,7 @@ class TraktSyncManager @Inject constructor(
     suspend fun syncSeriesNextUp() {
         withContext(Dispatchers.IO) {
             try {
+                val profileId = profileConfigurationManager.requireActiveProfileId()
                 // Sync watched movies from Trakt
                 val moviesResponse = traktSyncApi.getWatchedMovies()
                 val traktWatchedMovieIds = mutableSetOf<String>()
@@ -467,11 +476,12 @@ class TraktSyncManager @Inject constructor(
                     moviesResponse.body()?.forEach { watchedMovie ->
                         val imdbId = watchedMovie.movie.ids.imdb ?: return@forEach
                         traktWatchedMovieIds.add(imdbId)
-                        val existing = dao.getHistoryItem(imdbId)
+                        val existing = dao.getHistoryItem(imdbId, profileId)
                         if (existing == null) {
                             dao.upsertHistory(
                                 WatchHistoryEntity(
                                     id = imdbId,
+                                    profileId = profileId,
                                     title = watchedMovie.movie.title ?: "Unknown",
                                     poster = null,
                                     position = 0L,
@@ -508,11 +518,12 @@ class TraktSyncManager @Inject constructor(
                         season.episodes?.forEach { ep ->
                             val playbackId = "$imdbId:${season.number}:${ep.number}"
                             traktWatchedEpisodeIds.add(playbackId)
-                            val existing = dao.getHistoryItem(playbackId)
+                            val existing = dao.getHistoryItem(playbackId, profileId)
                             if (existing == null) {
                                 dao.upsertHistory(
                                     WatchHistoryEntity(
                                         id = playbackId,
+                                        profileId = profileId,
                                         title = "S${season.number}:E${ep.number} - $showTitle",
                                         poster = null,
                                         position = 0L,
@@ -577,7 +588,7 @@ class TraktSyncManager @Inject constructor(
 
                 // Reverse sync: unmark local items no longer watched on Trakt
                 if (moviesResponse.isSuccessful && showsResponse.isSuccessful) {
-                    val localWatched = dao.getScrobbledWatchedItems()
+                    val localWatched = dao.getScrobbledWatchedItems(profileId)
                     var unmarked = 0
                     for (item in localWatched) {
                         val normalizedId = normalizePlaybackId(item.id)
@@ -587,7 +598,7 @@ class TraktSyncManager @Inject constructor(
                             normalizedId in traktWatchedEpisodeIds
                         }
                         if (!stillWatched) {
-                            dao.deleteHistoryItem(item.id)
+                            dao.deleteHistoryItem(item.id, profileId)
                             unmarked++
                             Log.d(TAG, "Unmarked (removed from Trakt): ${item.title}")
                         }
@@ -781,6 +792,7 @@ class TraktSyncManager @Inject constructor(
     }
 
     private suspend fun pullFromTrakt(items: List<TraktWatchlistItem>) {
+        val profileId = profileConfigurationManager.requireActiveProfileId()
         for (item in items) {
             val (id, title, type) = when (item.type) {
                 "movie" -> Triple(
@@ -799,6 +811,7 @@ class TraktSyncManager @Inject constructor(
             dao.addToWatchlist(
                 WatchlistEntity(
                     id = id,
+                    profileId = profileId,
                     type = type,
                     title = title,
                     poster = null,

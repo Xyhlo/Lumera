@@ -93,9 +93,13 @@ class DetailsViewModel @Inject constructor(
 
     /** Reactive watchlist status — emits true/false as the current item's watchlist state changes. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val isInWatchlist: StateFlow<Boolean> = _state
-        .map { it.resolvedId ?: it.meta?.id }
-        .flatMapLatest { id -> if (id != null) dao.isInWatchlistFlow(id) else flowOf(false) }
+    val isInWatchlist: StateFlow<Boolean> = kotlinx.coroutines.flow.combine(
+        _state.map { it.resolvedId ?: it.meta?.id },
+        profileConfigurationManager.activeProfileId
+    ) { id, profileId -> id to profileId }
+        .flatMapLatest { (id, profileId) ->
+            if (id != null) dao.isInWatchlistFlow(id, profileId) else flowOf(false)
+        }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), false)
 
     private var loadDetailsJob: Job? = null
@@ -158,8 +162,9 @@ class DetailsViewModel @Inject constructor(
                 loadedContentKey = requestKey
                 // Use resolved ID for streams — guarantees IMDb format for stream addons
                 val streamFetchId = if (details.id.startsWith("tt")) details.id else resolvedId
+                val profileId = profileConfigurationManager.requireActiveProfileId()
                 val resumePlaybackId = if (details.type == "series") {
-                    val latest = dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%")
+                    val latest = dao.getLatestSeriesEpisodeHistory("${streamFetchId}:%", profileId)
                     if (latest != null && !latest.watched) {
                         latest.id // In-progress episode — resume it
                     } else {
@@ -173,11 +178,11 @@ class DetailsViewModel @Inject constructor(
                         } else null
                     }
                 } else {
-                    val movieHistory = dao.getHistoryItem(streamFetchId)
+                    val movieHistory = dao.getHistoryItem(streamFetchId, profileId)
                     if (movieHistory?.watched == true) null else movieHistory?.id
                 }
                 val isMovieWatched = if (details.type != "series") {
-                    dao.getHistoryItem(streamFetchId)?.watched == true
+                    dao.getHistoryItem(streamFetchId, profileId)?.watched == true
                 } else false
                 // Build per-episode progress map for the episodes sidebar
                 val episodeProgressMap = if (details.type == "series") {
@@ -248,8 +253,9 @@ class DetailsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            val profileId = profileConfigurationManager.requireActiveProfileId()
             val resumePlaybackId = if (meta.type == "series") {
-                val latest = dao.getLatestSeriesEpisodeHistory("${meta.id}:%")
+                val latest = dao.getLatestSeriesEpisodeHistory("${meta.id}:%", profileId)
                 if (latest != null && !latest.watched) {
                     latest.id
                 } else {
@@ -262,11 +268,11 @@ class DetailsViewModel @Inject constructor(
                     } else null
                 }
             } else {
-                val movieHistory = dao.getHistoryItem(meta.id)
+                val movieHistory = dao.getHistoryItem(meta.id, profileId)
                 if (movieHistory?.watched == true) null else movieHistory?.id
             }
             val isMovieWatched = if (meta.type != "series") {
-                dao.getHistoryItem(meta.id)?.watched == true
+                dao.getHistoryItem(meta.id, profileId)?.watched == true
             } else false
             if (_state.value.meta?.id == meta.id && _state.value.meta?.type == meta.type) {
                 val episodeProgressMap = if (meta.type == "series") {
@@ -295,7 +301,8 @@ class DetailsViewModel @Inject constructor(
      * Checks both with and without stream index suffix.
      */
     private suspend fun buildEpisodeProgressMap(seriesId: String): Map<String, EpisodeProgress> {
-        val historyItems = dao.getSeriesEpisodeHistory("$seriesId:%")
+        val profileId = profileConfigurationManager.requireActiveProfileId()
+        val historyItems = dao.getSeriesEpisodeHistory("$seriesId:%", profileId)
         if (historyItems.isEmpty()) return emptyMap()
 
         val map = mutableMapOf<String, EpisodeProgress>()
@@ -513,13 +520,15 @@ class DetailsViewModel @Inject constructor(
         val isCurrentlyWatched = _state.value.isMovieWatched
 
         viewModelScope.launch(Dispatchers.IO) {
+            val profileId = profileConfigurationManager.requireActiveProfileId()
             if (isCurrentlyWatched) {
-                dao.deleteHistoryItem(itemId)
+                dao.deleteHistoryItem(itemId, profileId)
                 traktSyncManager.pushMovieUnwatched(itemId)
             } else {
                 dao.upsertHistory(
                     WatchHistoryEntity(
                         id = itemId,
+                        profileId = profileId,
                         title = meta.name,
                         poster = meta.poster,
                         position = 0L,
@@ -547,13 +556,14 @@ class DetailsViewModel @Inject constructor(
         val isCurrentlyWatched = currentProgress?.watched ?: false
 
         viewModelScope.launch(Dispatchers.IO) {
+            val profileId = profileConfigurationManager.requireActiveProfileId()
             if (isCurrentlyWatched) {
                 // Unmark: remove watched entry from history
                 val playbackId = "$streamId:${episode.season}:${episode.episode}"
-                dao.deleteHistoryItem(playbackId)
+                dao.deleteHistoryItem(playbackId, profileId)
                 // Also try with stream index variants
-                dao.getSeriesEpisodeHistory("$playbackId:%").forEach {
-                    dao.deleteHistoryItem(it.id)
+                dao.getSeriesEpisodeHistory("$playbackId:%", profileId).forEach {
+                    dao.deleteHistoryItem(it.id, profileId)
                 }
                 traktSyncManager.pushEpisodeUnwatched(streamId, episode.season, episode.episode)
             } else {
@@ -562,6 +572,7 @@ class DetailsViewModel @Inject constructor(
                 dao.upsertHistory(
                     WatchHistoryEntity(
                         id = playbackId,
+                        profileId = profileId,
                         title = episode.title.takeIf { it.isNotBlank() && it != "Episode" }
                             ?: "S${episode.season}:E${episode.episode} - ${meta.name}",
                         poster = meta.poster,
@@ -740,21 +751,22 @@ class DetailsViewModel @Inject constructor(
         val meta = _state.value.meta ?: return
 
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profileId = profileConfigurationManager.requireActiveProfileId()
             // Collect items to clear
             val historyItems = if (meta.type == "series") {
-                dao.getSeriesEpisodeHistory("${meta.id}:%")
+                dao.getSeriesEpisodeHistory("${meta.id}:%", profileId)
             } else {
-                listOfNotNull(dao.getHistoryItem(meta.id))
+                listOfNotNull(dao.getHistoryItem(meta.id, profileId))
             }
 
             // Delete from local DB
             if (meta.type == "series") {
-                dao.deleteSeriesHistory("${meta.id}:%")
+                dao.deleteSeriesHistory("${meta.id}:%", profileId)
                 dao.deleteSeriesNextUp(meta.id)
                 sourceSelectionStore.clearSelectionsForPrefix(meta.id)
                 playbackTrackSelectionStore.clearSelectionsForPrefix(meta.id)
             } else {
-                dao.deleteHistoryItem(meta.id)
+                dao.deleteHistoryItem(meta.id, profileId)
                 sourceSelectionStore.clearSelection(meta.id)
                 playbackTrackSelectionStore.clearSelection(meta.id)
             }
@@ -799,12 +811,14 @@ class DetailsViewModel @Inject constructor(
         val meta = _state.value.meta ?: return
         val itemId = _state.value.resolvedId ?: meta.id
         viewModelScope.launch(Dispatchers.IO) {
-            if (dao.isInWatchlist(itemId)) {
-                dao.removeFromWatchlist(itemId)
+            val profileId = profileConfigurationManager.requireActiveProfileId()
+            if (dao.isInWatchlist(itemId, profileId)) {
+                dao.removeFromWatchlist(itemId, profileId)
                 traktSyncManager.pushRemove(itemId, meta.type)
             } else {
                 val entity = WatchlistEntity(
                     id = itemId,
+                    profileId = profileId,
                     type = meta.type,
                     title = meta.name,
                     poster = meta.poster,

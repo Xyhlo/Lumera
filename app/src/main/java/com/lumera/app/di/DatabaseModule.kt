@@ -149,6 +149,61 @@ private val MIGRATION_42_43 = object : Migration(42, 43) {
     }
 }
 
+private val MIGRATION_43_44 = object : Migration(43, 44) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Backfill profileId on existing watchlist/watch_history rows to the first existing
+        // profile (SQLite auto-generated IDs start at 1). If there are no profiles, rows
+        // orphan to profileId = 0 and will remain invisible until a profile claims them.
+        val defaultProfileId: Int = db.query("SELECT MIN(id) FROM profiles").use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getInt(0) else 0
+        }
+
+        // Recreate `watchlist` with composite primary key (id, profileId).
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS watchlist_new (" +
+                "id TEXT NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "type TEXT NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "poster TEXT, " +
+                "addedAt INTEGER NOT NULL, " +
+                "PRIMARY KEY(id, profileId))"
+        )
+        db.execSQL(
+            "INSERT INTO watchlist_new (id, profileId, type, title, poster, addedAt) " +
+                "SELECT id, $defaultProfileId, type, title, poster, addedAt FROM watchlist"
+        )
+        db.execSQL("DROP TABLE watchlist")
+        db.execSQL("ALTER TABLE watchlist_new RENAME TO watchlist")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_profileId ON watchlist(profileId)")
+
+        // Recreate `watch_history` with composite primary key (id, profileId).
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS watch_history_new (" +
+                "id TEXT NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "poster TEXT, " +
+                "background TEXT, " +
+                "logo TEXT, " +
+                "position INTEGER NOT NULL, " +
+                "duration INTEGER NOT NULL, " +
+                "lastWatched INTEGER NOT NULL, " +
+                "type TEXT NOT NULL, " +
+                "watched INTEGER NOT NULL DEFAULT 0, " +
+                "scrobbled INTEGER NOT NULL DEFAULT 0, " +
+                "PRIMARY KEY(id, profileId))"
+        )
+        db.execSQL(
+            "INSERT INTO watch_history_new (id, profileId, title, poster, background, logo, position, duration, lastWatched, type, watched, scrobbled) " +
+                "SELECT id, $defaultProfileId, title, poster, background, logo, position, duration, lastWatched, type, watched, scrobbled FROM watch_history"
+        )
+        db.execSQL("DROP TABLE watch_history")
+        db.execSQL("ALTER TABLE watch_history_new RENAME TO watch_history")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_history_profileId ON watch_history(profileId)")
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -168,7 +223,7 @@ object DatabaseModule {
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })
-            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43)
+            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44)
             .build()
     }
 

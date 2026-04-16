@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.tmdb.TmdbMetadataService
 import com.lumera.app.data.tmdb.TmdbService
@@ -34,7 +35,8 @@ class HomeViewModel @Inject constructor(
     private val dao: AddonDao,
     @ApplicationContext private val context: Context,
     private val tmdbService: TmdbService,
-    private val tmdbMetadataService: TmdbMetadataService
+    private val tmdbMetadataService: TmdbMetadataService,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
 
     private var loadJob: kotlinx.coroutines.Job? = null
@@ -288,13 +290,14 @@ class HomeViewModel @Inject constructor(
 
                 // Persist resolved images to watch history + series next-up DB
                 launch(Dispatchers.IO) {
+                    val profileId = profileConfigurationManager.requireActiveProfileId()
                     // For series, the history stores episode-level IDs (e.g. tt123:1:3)
                     // but the MetaItem uses the canonical series ID (tt123).
                     // Look up both the exact ID and all episode entries by prefix.
                     val historyItems = if (item.type == "series") {
-                        dao.getHistoryItemsByPrefix(item.id)
+                        dao.getHistoryItemsByPrefix(item.id, profileId)
                     } else {
-                        listOfNotNull(dao.getHistoryItem(item.id))
+                        listOfNotNull(dao.getHistoryItem(item.id, profileId))
                     }
                     for (historyItem in historyItems) {
                         val needsPoster = historyItem.poster.isNullOrBlank() && !fallback.poster.isNullOrBlank()
@@ -303,6 +306,7 @@ class HomeViewModel @Inject constructor(
                         if (needsPoster || needsBackground || needsLogo) {
                             dao.updateHistoryImages(
                                 id = historyItem.id,
+                                profileId = profileId,
                                 poster = if (needsPoster) fallback.poster else historyItem.poster,
                                 background = if (needsBackground) fallback.background else historyItem.background,
                                 logo = if (needsLogo) fallback.logo else historyItem.logo
@@ -586,10 +590,12 @@ class HomeViewModel @Inject constructor(
             hadHistoryWhenPositionSaved = false
             isRestoringPosition = false
 
+            val profileIdForQueries = currentProfileId ?: profileConfigurationManager.requireActiveProfileId()
+
             // Load History + Series Next Up only for Home
             if (screenName == "home") {
                 launch {
-                    dao.getWatchHistory().collect { history ->
+                    dao.getWatchHistory(profileIdForQueries).collect { history ->
                         _state.update { it.copy(history = history) }
                     }
                 }
@@ -604,7 +610,7 @@ class HomeViewModel @Inject constructor(
 
             // Load watched IDs for all tabs (watched indicator on posters)
             launch {
-                dao.getWatchedIds().collect { ids ->
+                dao.getWatchedIds(profileIdForQueries).collect { ids ->
                     // Extract canonical series ID from episode IDs (tt123:1:3 → tt123)
                     val canonicalIds = ids.map { id ->
                         val parts = id.split(":")

@@ -2,12 +2,17 @@ package com.lumera.app.data.model
 
 import androidx.compose.runtime.Immutable
 import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.Index
 
 @Immutable
-@Entity(tableName = "watch_history")
+@Entity(
+    tableName = "watch_history",
+    primaryKeys = ["id", "profileId"],
+    indices = [Index(value = ["profileId"])]
+)
 data class WatchHistoryEntity(
-    @PrimaryKey val id: String,
+    val id: String,
+    val profileId: Int,
     val title: String,
     val poster: String?,
     val background: String? = null,

@@ -3,9 +3,10 @@ package com.lumera.app.ui.settings
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +44,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import androidx.compose.ui.ExperimentalComposeUiApi
+
+private fun lerpDp(start: androidx.compose.ui.unit.Dp, end: androidx.compose.ui.unit.Dp, fraction: Float): androidx.compose.ui.unit.Dp {
+    return start + (end - start) * fraction
+}
 
 enum class SettingsSection(val label: String, @DrawableRes val iconRes: Int) {
     Personalization("Personalization", R.drawable.personalization_icon),
@@ -101,27 +106,15 @@ fun SettingsScreen(
         }
     }
     
-    // Animated padding values for smooth transition when nav mode changes
-    val rowStartPadding by animateDpAsState(
-        targetValue = if (isTopNav) 0.dp else 80.dp,
-        animationSpec = androidx.compose.animation.core.tween(300),
-        label = "rowStartPadding"
-    )
-    val colTopPadding by animateDpAsState(
-        targetValue = if (isTopNav) 70.dp else 40.dp,
-        animationSpec = androidx.compose.animation.core.tween(300),
-        label = "colTopPadding"
-    )
-    val contentTopPadding by animateDpAsState(
-        targetValue = if (isTopNav) 70.dp else 40.dp,
-        animationSpec = androidx.compose.animation.core.tween(300),
-        label = "contentTopPadding"
-    )
-    val colStartPadding by animateDpAsState(
-        targetValue = if (isTopNav) 50.dp else 32.dp,
-        animationSpec = androidx.compose.animation.core.tween(300),
-        label = "colStartPadding"
-    )
+    val navModeTransition = updateTransition(targetState = isTopNav, label = "navModeTransition")
+    val navProgress by navModeTransition.animateFloat(
+        transitionSpec = { tween(300) },
+        label = "navProgress"
+    ) { if (it) 1f else 0f }
+    val rowStartPadding by remember { derivedStateOf { lerpDp(80.dp, 0.dp, navProgress) } }
+    val colTopPadding by remember { derivedStateOf { lerpDp(40.dp, 70.dp, navProgress) } }
+    val contentTopPadding = colTopPadding
+    val colStartPadding by remember { derivedStateOf { lerpDp(32.dp, 50.dp, navProgress) } }
 
     Box(
         modifier = Modifier
@@ -154,74 +147,70 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = 32.dp, start = 16.dp)
             )
 
-            Column(
+            LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .focusRequester(sidebarListRequester)
                     .padding(top = 0.dp, bottom = 10.dp)
             ) {
-                SettingsSection.entries.forEach { section ->
-                    key(section) {
-                        val isSelected = selectedSection == section
+                items(SettingsSection.entries, key = { it.name }) { section ->
+                    val isSelected = selectedSection == section
 
-                        // FUNCTION: Enter Content Logic (with lock)
-                        fun enterContent() {
-                            if (isTransitioning) return // BLOCKED
-                            isTransitioning = true
-                            selectedSection = section
-                            displayedSection = section
-                            scope.launch {
-                                delay(400) // Wait for animation
-                                contentPaneRequester.requestFocus()
-                                isTransitioning = false // UNLOCK
-                            }
+                    fun enterContent() {
+                        if (isTransitioning) return
+                        isTransitioning = true
+                        selectedSection = section
+                        displayedSection = section
+                        scope.launch {
+                            delay(400)
+                            contentPaneRequester.requestFocus()
+                            isTransitioning = false
+                        }
+                    }
+
+                    val isFirstSection = section == SettingsSection.entries.first()
+
+                    val focusModifier = Modifier
+                        .focusRequester(itemRequesters[section]!!)
+                        .then(if (isSelected) Modifier.focusRequester(entryRequester) else Modifier)
+                        .onPreviewKeyEvent {
+                            if (it.type == KeyEventType.KeyDown) {
+                                when (it.key) {
+                                    Key.DirectionLeft -> {
+                                        if (!isTransitioning) {
+                                            drawerRequester.requestFocus()
+                                        }
+                                        true
+                                    }
+                                    Key.Back -> {
+                                        if (!isTransitioning) {
+                                            drawerRequester.requestFocus()
+                                            true
+                                        } else false
+                                    }
+                                    Key.DirectionUp -> {
+                                        if (isFirstSection && !isTransitioning && isTopNav) {
+                                            drawerRequester.requestFocus()
+                                            true
+                                        } else false
+                                    }
+                                    Key.DirectionRight, Key.DirectionCenter, Key.Enter -> {
+                                        enterContent()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
                         }
 
-                        val isFirstSection = section == SettingsSection.entries.first()
-
-                        val focusModifier = Modifier
-                            .focusRequester(itemRequesters[section]!!)
-                            .then(if (isSelected) Modifier.focusRequester(entryRequester) else Modifier)
-                            .onPreviewKeyEvent {
-                                if (it.type == KeyEventType.KeyDown) {
-                                    when (it.key) {
-                                        Key.DirectionLeft -> {
-                                            if (!isTransitioning) {
-                                                drawerRequester.requestFocus()
-                                            }
-                                            true
-                                        }
-                                        Key.Back -> {
-                                            if (!isTransitioning) {
-                                                drawerRequester.requestFocus()
-                                                true
-                                            } else false
-                                        }
-                                        Key.DirectionUp -> {
-                                            // Up on first section -> go to drawer/topnav (ONLY in top nav mode)
-                                            if (isFirstSection && !isTransitioning && isTopNav) {
-                                                drawerRequester.requestFocus()
-                                                true
-                                            } else false
-                                        }
-                                        Key.DirectionRight, Key.DirectionCenter, Key.Enter -> {
-                                            enterContent()
-                                            true
-                                        }
-                                        else -> false
-                                    }
-                                } else false
-                            }
-
-                        SettingsSidebarItem(
-                            label = section.label,
-                            iconRes = section.iconRes,
-                            isSelected = isSelected,
-                            modifier = focusModifier,
-                            onClick = { if (!isTransitioning) enterContent() }, // GATED
-                            onFocus = { selectedSection = section }
-                        )
-                    }
+                    SettingsSidebarItem(
+                        label = section.label,
+                        iconRes = section.iconRes,
+                        isSelected = isSelected,
+                        modifier = focusModifier,
+                        onClick = { if (!isTransitioning) enterContent() },
+                        onFocus = { selectedSection = section }
+                    )
                 }
             }
         }

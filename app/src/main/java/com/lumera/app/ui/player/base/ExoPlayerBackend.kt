@@ -512,16 +512,21 @@ class ExoPlayerBackend(
     override fun play() {
         if (released) return
         val player = exoPlayer ?: return
+        if (player.playWhenReady && player.playbackState == Player.STATE_READY) return
         val wasPaused = !player.playWhenReady
         player.play()
-        if (wasPaused && player.playbackState == Player.STATE_READY) {
-            // Force a codec flush on resume to prevent indefinite buffering on
-            // certain MKV files. Seeking to current position + 1ms ensures
-            // ExoPlayer doesn't optimise the seek away, while CLOSEST_SYNC
-            // snaps to the nearest keyframe (no visible skip).
-            val pos = player.currentPosition.coerceAtLeast(0L)
-            player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-            player.seekTo(pos + 1L)
+        if (wasPaused && player.playbackState == Player.STATE_READY && !isTorrentStream) {
+            val tokenAtResume = loadToken
+            scope.launch {
+                delay(100L)
+                if (released || loadToken != tokenAtResume) return@launch
+                val livePlayer = exoPlayer ?: return@launch
+                if (livePlayer.playbackState != Player.STATE_READY) return@launch
+                if (!livePlayer.playWhenReady) return@launch
+                val pos = livePlayer.currentPosition.coerceAtLeast(0L)
+                livePlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                livePlayer.seekTo(pos + 1L)
+            }
         }
     }
 

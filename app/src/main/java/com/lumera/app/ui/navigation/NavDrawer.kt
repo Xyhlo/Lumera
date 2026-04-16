@@ -90,11 +90,54 @@ fun NavDrawer(
         onClose()
     }
 
-    val showStaticMask = currentDestination in listOf(
-        NavDestination.Home,
-        NavDestination.Movies,
-        NavDestination.Series,
-        NavDestination.Watchlist
+    val showStaticMask by remember(currentDestination) {
+        derivedStateOf {
+            currentDestination == NavDestination.Home ||
+                currentDestination == NavDestination.Movies ||
+                currentDestination == NavDestination.Series ||
+                currentDestination == NavDestination.Watchlist
+        }
+    }
+
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val staticMaskGradient = remember(backgroundColor) {
+        Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0.0f to backgroundColor.copy(alpha = 0.8f),
+                0.12f to backgroundColor.copy(alpha = 0.72f),
+                0.25f to backgroundColor.copy(alpha = 0.62f),
+                0.38f to backgroundColor.copy(alpha = 0.50f),
+                0.50f to backgroundColor.copy(alpha = 0.38f),
+                0.65f to backgroundColor.copy(alpha = 0.24f),
+                0.78f to backgroundColor.copy(alpha = 0.13f),
+                0.90f to backgroundColor.copy(alpha = 0.05f),
+                1.0f to Color.Transparent
+            ),
+            startX = 0f,
+            endX = 350f
+        )
+    }
+    val expansionShadowGradient = remember(backgroundColor) {
+        Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0.0f to backgroundColor.copy(alpha = 0.95f),
+                0.12f to backgroundColor.copy(alpha = 0.90f),
+                0.25f to backgroundColor.copy(alpha = 0.82f),
+                0.38f to backgroundColor.copy(alpha = 0.70f),
+                0.50f to backgroundColor.copy(alpha = 0.55f),
+                0.65f to backgroundColor.copy(alpha = 0.38f),
+                0.78f to backgroundColor.copy(alpha = 0.20f),
+                0.90f to backgroundColor.copy(alpha = 0.08f),
+                1.0f to Color.Transparent
+            ),
+            startX = 0f,
+            endX = 900f
+        )
+    }
+    val expansionShadowAlpha by animateFloatAsState(
+        targetValue = if (isMenuFocused) 1f else 0f,
+        animationSpec = tween(300),
+        label = "ExpansionShadowAlpha"
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -105,60 +148,24 @@ fun NavDrawer(
         }
 
         // LAYER 2: Static Hero Mask
-        val backgroundColor = MaterialTheme.colorScheme.background
         if (showStaticMask) {
             Box(
                 modifier = Modifier
                     .width(400.dp)
                     .fillMaxHeight()
                     .zIndex(1f)
-                    .background(
-                        Brush.horizontalGradient(
-                            colorStops = arrayOf(
-                                0.0f to backgroundColor.copy(alpha = 0.8f),
-                                0.12f to backgroundColor.copy(alpha = 0.72f),
-                                0.25f to backgroundColor.copy(alpha = 0.62f),
-                                0.38f to backgroundColor.copy(alpha = 0.50f),
-                                0.50f to backgroundColor.copy(alpha = 0.38f),
-                                0.65f to backgroundColor.copy(alpha = 0.24f),
-                                0.78f to backgroundColor.copy(alpha = 0.13f),
-                                0.90f to backgroundColor.copy(alpha = 0.05f),
-                                1.0f to Color.Transparent
-                            ),
-                            startX = 0f,
-                            endX = 350f
-                        )
-                    )
+                    .background(staticMaskGradient)
             )
         }
 
         // LAYER 3: Dynamic Expansion Shadow
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isMenuFocused,
-            enter = androidx.compose.animation.fadeIn(animationSpec = tween(300)),
-            exit = androidx.compose.animation.fadeOut(animationSpec = tween(300)),
-            modifier = Modifier.zIndex(1.5f).fillMaxSize()
-        ) {
+        if (expansionShadowAlpha > 0f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colorStops = arrayOf(
-                                0.0f to backgroundColor.copy(alpha = 0.95f),
-                                0.12f to backgroundColor.copy(alpha = 0.90f),
-                                0.25f to backgroundColor.copy(alpha = 0.82f),
-                                0.38f to backgroundColor.copy(alpha = 0.70f),
-                                0.50f to backgroundColor.copy(alpha = 0.55f),
-                                0.65f to backgroundColor.copy(alpha = 0.38f),
-                                0.78f to backgroundColor.copy(alpha = 0.20f),
-                                0.90f to backgroundColor.copy(alpha = 0.08f),
-                                1.0f to Color.Transparent
-                            ),
-                            startX = 0f,
-                            endX = 900f
-                        )
-                    )
+                    .zIndex(1.5f)
+                    .graphicsLayer { alpha = expansionShadowAlpha }
+                    .background(expansionShadowGradient)
             )
         }
 

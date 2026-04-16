@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.model.WatchHistoryEntity
+import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.trakt.TraktScrobbleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +18,8 @@ private const val WATCHED_THRESHOLD = 0.90 // 90% — above Trakt's 80% minimum
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val dao: AddonDao,
-    private val traktScrobbleManager: TraktScrobbleManager
+    private val traktScrobbleManager: TraktScrobbleManager,
+    private val profileConfigurationManager: ProfileConfigurationManager
 ) : ViewModel() {
 
     fun saveProgress(
@@ -33,7 +35,8 @@ class PlayerViewModel @Inject constructor(
             val safePosition = position.coerceAtLeast(0L)
             if (safePosition < 5_000L) return@launch
 
-            val existing = dao.getHistoryItem(id)
+            val profileId = profileConfigurationManager.requireActiveProfileId()
+            val existing = dao.getHistoryItem(id, profileId)
             val safeDuration = (duration ?: existing?.duration ?: safePosition)
                 .coerceAtLeast(safePosition)
 
@@ -44,6 +47,7 @@ class PlayerViewModel @Inject constructor(
 
             val entry = WatchHistoryEntity(
                 id = id,
+                profileId = profileId,
                 title = title,
                 poster = poster ?: existing?.poster,
                 background = existing?.background,
@@ -61,7 +65,8 @@ class PlayerViewModel @Inject constructor(
 
     fun markCompleted(id: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
-            val existing = dao.getHistoryItem(id)
+            val profileId = profileConfigurationManager.requireActiveProfileId()
+            val existing = dao.getHistoryItem(id, profileId)
             if (existing != null) {
                 dao.upsertHistory(existing.copy(watched = true, lastWatched = System.currentTimeMillis()))
             }
@@ -90,7 +95,8 @@ class PlayerViewModel @Inject constructor(
 
     suspend fun getResumePosition(id: String): Long {
         return withContext(Dispatchers.IO) {
-            val item = dao.getHistoryItem(id)
+            val profileId = profileConfigurationManager.requireActiveProfileId()
+            val item = dao.getHistoryItem(id, profileId)
             item?.position?.takeIf { it > 0 } ?: 0L
         }
     }

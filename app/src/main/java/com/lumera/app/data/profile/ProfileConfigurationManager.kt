@@ -13,6 +13,8 @@ import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.stremio.CatalogManifest
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import java.io.File
 import javax.inject.Inject
@@ -49,6 +51,11 @@ class ProfileConfigurationManager @Inject constructor(
 
     private var startupRuntimeCaptured = false
 
+    private val _activeProfileId = MutableStateFlow(getLastActiveProfileId() ?: 0)
+    val activeProfileId: StateFlow<Int> = _activeProfileId
+
+    fun requireActiveProfileId(): Int = _activeProfileId.value
+
     fun markPendingSetup(profileId: Int) {
         val updated = getPendingSetupIds().toMutableSet().apply { add(profileId.toString()) }
         prefs.edit().putStringSet(KEY_PENDING_SETUP_PROFILES, updated).apply()
@@ -73,7 +80,7 @@ class ProfileConfigurationManager @Inject constructor(
     }
 
     suspend fun saveRuntimeState(profileId: Int) {
-        val snapshot = captureRuntimeSnapshot()
+        val snapshot = captureRuntimeSnapshot(profileId)
         writeSnapshot(profileId, snapshot)
         stremioAuthManager.saveCredentialsForProfile(profileId)
         setLastActiveProfileId(profileId)
@@ -87,7 +94,7 @@ class ProfileConfigurationManager @Inject constructor(
     suspend fun loadRuntimeState(profileId: Int) {
         val existingSnapshot = readSnapshot(profileId)
         val snapshot = existingSnapshot ?: if (!needsInitialSetup(profileId)) {
-            captureRuntimeSnapshot().also {
+            captureRuntimeSnapshot(profileId).also {
                 writeSnapshot(profileId, it)
                 stremioAuthManager.saveCredentialsForProfile(profileId)
             }
@@ -95,11 +102,12 @@ class ProfileConfigurationManager @Inject constructor(
             ProfileRuntimeSnapshot()
         }
         dao.replaceRuntimeState(
+            profileId = profileId,
             addons = snapshot.addons,
             catalogConfigs = snapshot.catalogConfigs,
             hubRows = snapshot.hubRows,
             hubRowItems = snapshot.hubRowItems,
-            watchHistory = snapshot.watchHistory
+            watchHistory = snapshot.watchHistory.map { it.copy(profileId = profileId) }
         )
         stremioAuthManager.loadCredentialsForProfile(profileId)
         setLastActiveProfileId(profileId)
@@ -113,7 +121,7 @@ class ProfileConfigurationManager @Inject constructor(
 
     suspend fun initializeByCopying(targetProfileId: Int, sourceProfileId: Int) {
         captureStartupRuntimeIfNeeded()
-        val sourceSnapshot = readSnapshot(sourceProfileId) ?: captureRuntimeSnapshot().also {
+        val sourceSnapshot = readSnapshot(sourceProfileId) ?: captureRuntimeSnapshot(sourceProfileId).also {
             writeSnapshot(sourceProfileId, it)
             stremioAuthManager.saveCredentialsForProfile(sourceProfileId)
         }
@@ -158,13 +166,13 @@ class ProfileConfigurationManager @Inject constructor(
         )
     }
 
-    private suspend fun captureRuntimeSnapshot(): ProfileRuntimeSnapshot {
+    private suspend fun captureRuntimeSnapshot(profileId: Int): ProfileRuntimeSnapshot {
         return ProfileRuntimeSnapshot(
             addons = dao.getAllAddons().firstOrNull() ?: emptyList(),
             catalogConfigs = dao.getAllCatalogConfigs().firstOrNull() ?: emptyList(),
             hubRows = dao.getAllHubRows().firstOrNull() ?: emptyList(),
             hubRowItems = dao.getAllHubRowItems().firstOrNull() ?: emptyList(),
-            watchHistory = dao.getWatchHistory().firstOrNull() ?: emptyList()
+            watchHistory = dao.getWatchHistory(profileId).firstOrNull() ?: emptyList()
         )
     }
 
@@ -252,9 +260,11 @@ class ProfileConfigurationManager @Inject constructor(
 
     fun clearLastActiveProfileId() {
         prefs.edit().remove(KEY_LAST_ACTIVE_PROFILE_ID).apply()
+        _activeProfileId.value = 0
     }
 
     private fun setLastActiveProfileId(profileId: Int) {
         prefs.edit().putInt(KEY_LAST_ACTIVE_PROFILE_ID, profileId).apply()
+        _activeProfileId.value = profileId
     }
 }

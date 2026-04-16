@@ -1251,41 +1251,42 @@ private fun PersistLazyListPosition(
 
 @Composable
 fun CinematicBackground(item: MetaItem?) {
-    // Use the theme's actual background color
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-    
-    // Only fade LEFT and BOTTOM edges - top/right are at screen edge
-    val leftFade = Brush.horizontalGradient(
-        colorStops = arrayOf(
-            0.0f to backgroundColor,
-            0.1f to backgroundColor.copy(0.95f),
-            0.2f to backgroundColor.copy(0.85f),
-            0.3f to backgroundColor.copy(0.72f),
-            0.4f to backgroundColor.copy(0.55f),
-            0.55f to backgroundColor.copy(0.35f),
-            0.7f to backgroundColor.copy(0.18f),
-            0.85f to backgroundColor.copy(0.07f),
-            1.0f to Color.Transparent
-        ),
-        startX = 0f,
-        endX = 500f
-    )
-    
-    // Bottom fade: blend into the rows area
-    val bottomFade = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to Color.Transparent,
-            0.2f to backgroundColor.copy(0.05f),
-            0.35f to backgroundColor.copy(0.15f),
-            0.45f to backgroundColor.copy(0.25f),
-            0.55f to backgroundColor.copy(0.38f),
-            0.65f to backgroundColor.copy(0.52f),
-            0.75f to backgroundColor.copy(0.68f),
-            0.85f to backgroundColor.copy(0.82f),
-            0.92f to backgroundColor.copy(0.92f),
-            1.0f to backgroundColor
+
+    val leftFade = remember(backgroundColor) {
+        Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0.0f to backgroundColor,
+                0.1f to backgroundColor.copy(0.95f),
+                0.2f to backgroundColor.copy(0.85f),
+                0.3f to backgroundColor.copy(0.72f),
+                0.4f to backgroundColor.copy(0.55f),
+                0.55f to backgroundColor.copy(0.35f),
+                0.7f to backgroundColor.copy(0.18f),
+                0.85f to backgroundColor.copy(0.07f),
+                1.0f to Color.Transparent
+            ),
+            startX = 0f,
+            endX = 500f
         )
-    )
+    }
+
+    val bottomFade = remember(backgroundColor) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to Color.Transparent,
+                0.2f to backgroundColor.copy(0.05f),
+                0.35f to backgroundColor.copy(0.15f),
+                0.45f to backgroundColor.copy(0.25f),
+                0.55f to backgroundColor.copy(0.38f),
+                0.65f to backgroundColor.copy(0.52f),
+                0.75f to backgroundColor.copy(0.68f),
+                0.85f to backgroundColor.copy(0.82f),
+                0.92f to backgroundColor.copy(0.92f),
+                1.0f to backgroundColor
+            )
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
         Box(modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.65f)) {
