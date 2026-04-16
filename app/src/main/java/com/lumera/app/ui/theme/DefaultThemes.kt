@@ -112,10 +112,23 @@ object DefaultThemes {
         category = "dark"
     )
 
+    val CYBERPUNK = ThemeEntity(
+        id = "cyberpunk",
+        name = "Cyberpunk",
+        primaryColor = 0xFF00E5FF,      // Neon Cyan
+        backgroundColor = 0xFF0A0E1A,   // Deep Dark Blue
+        surfaceColor = 0xFF111833,      // Dark Navy
+        textColor = 0xFFE0F7FA,         // Ice White
+        textMutedColor = 0xFF4DD0E1,    // Soft Cyan
+        errorColor = 0xFFFF1744,        // Neon Red
+        isBuiltIn = true,
+        category = "colorful"
+    )
+
     /**
      * All built-in themes in display order.
      */
-    val ALL = listOf(VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
+    val ALL = listOf(VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE, CYBERPUNK)
 
     /**
      * Get a built-in theme by ID, returns VOID as fallback.
