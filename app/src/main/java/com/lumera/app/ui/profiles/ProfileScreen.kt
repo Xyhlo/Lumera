@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 
 private const val PROFILE_HORIZONTAL_REPEAT_INTERVAL_MS = 150L
 
@@ -68,6 +69,12 @@ fun ProfileScreen(
 ) {
     val wizardStep by viewModel.wizardStep.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+
+    LaunchedEffect(profiles.isEmpty(), wizardStep) {
+        if (profiles.isEmpty() && wizardStep == 0) {
+            viewModel.startWizard()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -85,30 +92,22 @@ fun ProfileScreen(
             ) { step ->
                 when (step) {
                     0 -> {
-                        // ZERO STATE or SELECTOR
-                        if (profiles.isEmpty()) {
-                            WelcomeView(onStart = { viewModel.startWizard() })
-                        } else {
-                            ProfileSelectorView(
-                                profiles = profiles,
-                                onSelect = onProfileSelected,
-                                onAdd = { viewModel.startWizard() },
-                                onEdit = { viewModel.startEditWizard(it) },
-                                onDelete = { viewModel.deleteProfile(it.id) },
-                                viewModel = viewModel
-                            )
-                        }
+                        ProfileSelectorView(
+                            profiles = profiles,
+                            onSelect = onProfileSelected,
+                            onAdd = { viewModel.startWizard() },
+                            onEdit = { viewModel.startEditWizard(it) },
+                            onDelete = { viewModel.deleteProfile(it.id) },
+                            viewModel = viewModel
+                        )
                     }
-                    1 -> WizardNameStep(
+                    1 -> WizardNameAvatarStep(
                         initialName = viewModel.tempName,
-                        onNext = { viewModel.setWizardName(it) },
+                        initialAvatar = viewModel.tempAvatarRef,
+                        onNext = { name, avatarKey -> viewModel.setWizardNameAndAvatar(name, avatarKey) },
                         onCancel = { viewModel.cancelWizard() }
                     )
-                    2 -> WizardAvatarStep(
-                        onNext = { viewModel.setWizardAvatar(it) },
-                        onBack = { viewModel.goBackStep() }
-                    )
-                    3 -> WizardThemeStep(
+                    2 -> WizardThemeStep(
                         onFinish = { viewModel.setWizardTheme(it) },
                         onBack = { viewModel.goBackStep() }
                     )
@@ -119,40 +118,6 @@ fun ProfileScreen(
     }
 }
 
-
-// --- 1. WELCOME VIEW ---
-@Composable
-fun WelcomeView(onStart: () -> Unit) {
-    val requester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(100); requester.requestFocus() }
-
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            "WELCOME TO LUMERA",
-            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
-            color = Color.White
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Your cinematic universe awaits.",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.Gray
-        )
-        Spacer(Modifier.height(48.dp))
-
-        VoidButton(
-            text = "Create First Profile",
-            onClick = onStart,
-            isPrimary = true,
-            modifier = Modifier.width(250.dp),
-            focusRequester = requester
-        )
-    }
-}
 
 // --- 2. SELECTOR VIEW ---
 @Composable
@@ -648,117 +613,196 @@ fun DeleteConfirmationDialog(
 // --- 3. WIZARD STEPS ---
 
 @Composable
-fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -> Unit) {
+fun WizardNameAvatarStep(
+    initialName: String,
+    initialAvatar: String,
+    onNext: (String, String) -> Unit,
+    onCancel: () -> Unit
+) {
     var name by remember { mutableStateOf(initialName) }
-    val focusRequester = remember { FocusRequester() }
+    var selectedAvatar by remember { mutableStateOf(initialAvatar) }
+    val nameFocusRequester = remember { FocusRequester() }
+    val categories = ProfileAssets.AVATAR_CATEGORIES
+    var showUploadDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { delay(100); focusRequester.requestFocus() }
+    val categoryFocusRequesters = remember(categories.size) {
+        categories.map { cat ->
+            List(cat.avatars.size) { FocusRequester() }
+        }
+    }
+    val uploadButtonRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(100)
+        nameFocusRequester.requestFocus()
+    }
     BackHandler { onCancel() }
+
+    val context = LocalContext.current
+    val avatarSource = ProfileAssets.getAvatarSource(selectedAvatar)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .offset(y = (-80).dp), // Move up to avoid virtual keyboard cropping
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 48.dp, vertical = 32.dp)
     ) {
-        Text(
-            if(initialName.isEmpty()) "What should we call you?" else "Update your name",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White
-        )
-        Spacer(Modifier.height(32.dp))
-
-        Box(modifier = Modifier.width(400.dp)) {
-            VoidInput(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = "Enter Name",
-                modifier = Modifier.focusRequester(focusRequester),
-                onDone = { if(name.isNotEmpty()) onNext(name) }
-            )
-        }
-    }
-}
-
-@Composable
-fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
-    val avatars = ProfileAssets.AVATAR_MAP.toList()
-    val initialIndex = avatars.size / 2
-    val listState = rememberLazyListState()
-    val horizontalRepeatGate = remember {
-        DpadRepeatGate(horizontalRepeatIntervalMs = PROFILE_HORIZONTAL_REPEAT_INTERVAL_MS)
-    }
-    val focusRequesters = remember(avatars.size) { List(avatars.size) { FocusRequester() } }
-    val uploadButtonRequester = remember { FocusRequester() }
-    
-    var showUploadDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        listState.scrollToItem(initialIndex)
-        delay(100)
-        focusRequesters[initialIndex].requestFocus()
-    }
-    BackHandler { onBack() }
-
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Choose an Avatar", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-        Spacer(Modifier.height(16.dp))
-        Text("Select an avatar that represents you.", color = Color.Gray)
-
-        Spacer(Modifier.height(40.dp))
-
-        CenterCarouselRow(
-            itemWidth = 120.dp,
-            itemSpacing = 24.dp,
-            state = listState,
-            modifier = Modifier.onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionLeft || event.key == Key.DirectionRight)
-                ) {
-                    horizontalRepeatGate.shouldConsume(event)
-                } else {
-                    false
-                }
-            }
+        // Top section: Avatar preview + Name input
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            items(avatars.size) { index ->
-                val (key, resId) = avatars[index]
-                AvatarGridItem(
-                    resId = resId,
-                    onClick = { onNext(key) },
-                    focusRequester = focusRequesters[index],
-                    modifier = Modifier.size(120.dp)
+            // Large avatar preview
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1A1A1A))
+                    .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(avatarSource)
+                        .size(300, 300)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Selected Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
+
+            Spacer(Modifier.width(24.dp))
+
+            // Name input
+            Column {
+                Text(
+                    if (initialName.isEmpty()) "What should we call you?" else "Update your name",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(12.dp))
+                Box(modifier = Modifier.width(350.dp)) {
+                    VoidInput(
+                        value = name,
+                        onValueChange = { name = it },
+                        placeholder = "Enter Name",
+                        modifier = Modifier.focusRequester(nameFocusRequester),
+                        onDone = {
+                            if (name.isNotEmpty()) {
+                                categoryFocusRequesters.firstOrNull()?.firstOrNull()?.requestFocus()
+                            }
+                        }
+                    )
+                }
+            }
         }
-        
-        Spacer(Modifier.height(32.dp))
-        
-        Text(
-            "Or",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.Gray
+
+        // Divider
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color(0xFF1A1A1A))
         )
-        
+
         Spacer(Modifier.height(16.dp))
-        
-        UploadAvatarButton(
-            onClick = { showUploadDialog = true },
-            focusRequester = uploadButtonRequester
+
+        // Avatar category rows
+        val scrollState = rememberLazyListState()
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = scrollState,
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            categories.forEachIndexed { catIndex, category ->
+                item(key = category.label) {
+                    Column {
+                        Text(
+                            text = category.label.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = Color(0xFF9AA0A6),
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+
+                        val rowState = rememberLazyListState()
+                        val horizontalRepeatGate = remember {
+                            DpadRepeatGate(horizontalRepeatIntervalMs = PROFILE_HORIZONTAL_REPEAT_INTERVAL_MS)
+                        }
+
+                        androidx.compose.foundation.lazy.LazyRow(
+                            state = rowState,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.DirectionLeft || event.key == Key.DirectionRight)
+                                ) {
+                                    horizontalRepeatGate.shouldConsume(event)
+                                } else {
+                                    false
+                                }
+                            }
+                        ) {
+                            items(category.avatars.size) { avatarIndex ->
+                                val avatar = category.avatars[avatarIndex]
+                                AvatarGridItem(
+                                    resId = avatar.resId,
+                                    onClick = {
+                                        selectedAvatar = avatar.key
+                                        if (name.isNotEmpty()) {
+                                            onNext(name, avatar.key)
+                                        }
+                                    },
+                                    focusRequester = categoryFocusRequesters[catIndex][avatarIndex],
+                                    modifier = Modifier.size(80.dp),
+                                    onFocused = { selectedAvatar = avatar.key }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Upload button at the bottom
+            item(key = "upload") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    UploadAvatarButton(
+                        onClick = { showUploadDialog = true },
+                        focusRequester = uploadButtonRequester
+                    )
+                }
+            }
+        }
+
+        // Bottom hint
+        Text(
+            text = "← → Navigate  |  ↑ ↓ Switch Category  |  Enter Select",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF444444),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            textAlign = TextAlign.Center
         )
     }
-    
+
     if (showUploadDialog) {
         AvatarUploadDialog(
             onDismissRequest = { showUploadDialog = false },
             onAvatarReceived = { avatarPath ->
                 showUploadDialog = false
-                onNext(avatarPath)
+                selectedAvatar = avatarPath
+                if (name.isNotEmpty()) {
+                    onNext(name, avatarPath)
+                }
             }
         )
     }

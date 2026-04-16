@@ -74,14 +74,10 @@ class ProfileViewModel @Inject constructor(
         editingProfileId = null
     }
 
-    fun setWizardName(name: String) {
+    fun setWizardNameAndAvatar(name: String, avatarKey: String) {
         tempName = name
-        _wizardStep.value = 2
-    }
-
-    fun setWizardAvatar(avatarKey: String) {
         tempAvatarRef = avatarKey
-        _wizardStep.value = 3
+        _wizardStep.value = 2
     }
 
     fun setWizardTheme(themeId: String) {
