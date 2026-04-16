@@ -10,7 +10,7 @@ data class ProfileEntity(
 
     val themeId: String = "void",
 
-    val avatarRef: String = "avatar_1",
+    val avatarRef: String = "avatar_anime_01",
 
     val roundCorners: Boolean = true,
     val hubRoundCorners: Boolean = true,

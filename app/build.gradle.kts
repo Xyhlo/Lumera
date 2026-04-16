@@ -57,12 +57,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("lumera-release.jks")
+            storePassword = "lumera123"
+            keyAlias = "lumera"
+            keyPassword = "lumera123"
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".test"
             resValue("string", "app_name", "Lumera Test")
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

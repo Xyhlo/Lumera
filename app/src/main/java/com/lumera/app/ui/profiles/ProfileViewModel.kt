@@ -33,7 +33,7 @@ class ProfileViewModel @Inject constructor(
 
     // WIZARD DATA
     var tempName = ""
-    var tempAvatarRef = "avatar_1"
+    var tempAvatarRef = "avatar_anime_01"
     var tempThemeId = "void"  // Changed from tempColor
 
     private var editingProfileId: Int? = null
@@ -56,7 +56,7 @@ class ProfileViewModel @Inject constructor(
     fun startWizard() {
         editingProfileId = null
         tempName = ""
-        tempAvatarRef = "avatar_1"
+        tempAvatarRef = "avatar_anime_01"
         tempThemeId = "void"
         _wizardStep.value = 1
     }

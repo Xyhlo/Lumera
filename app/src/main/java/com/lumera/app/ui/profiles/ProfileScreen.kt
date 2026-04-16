@@ -70,12 +70,6 @@ fun ProfileScreen(
     val wizardStep by viewModel.wizardStep.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    LaunchedEffect(profiles.isEmpty(), wizardStep) {
-        if (profiles.isEmpty() && wizardStep == 0) {
-            viewModel.startWizard()
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
