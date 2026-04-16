@@ -712,6 +712,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         dismissSplash()
+        TorrentService.clearCallbacks()
         super.onDestroy()
     }
 
