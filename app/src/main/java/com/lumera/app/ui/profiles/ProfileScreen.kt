@@ -191,16 +191,16 @@ fun ProfileSelectorView(
         }
     }
 
-    if (activeProfileForOptions != null) {
+    activeProfileForOptions?.let { profile ->
         ProfileOptionsDialog(
-            profile = activeProfileForOptions!!,
+            profile = profile,
             onDismiss = { activeProfileForOptions = null },
             onEdit = {
-                onEdit(activeProfileForOptions!!)
+                onEdit(profile)
                 activeProfileForOptions = null
             },
             onDelete = {
-                onDelete(activeProfileForOptions!!)
+                onDelete(profile)
                 activeProfileForOptions = null
             }
         )

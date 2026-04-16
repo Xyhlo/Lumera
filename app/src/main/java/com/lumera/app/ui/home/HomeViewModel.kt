@@ -172,7 +172,8 @@ class HomeViewModel @Inject constructor(
                     }
                     appendItemsToRow(configId, batch)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "loadMoreItems failed", e)
                 // Silently fail - user can try scrolling again
             } finally {
                 loadingMoreRows.remove(configId)
@@ -748,7 +749,8 @@ class HomeViewModel @Inject constructor(
                     }
                     onResult(fetchedRow.title, fetchedRow.items)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "openHub failed", e)
                 // Ignore error
             }
         }

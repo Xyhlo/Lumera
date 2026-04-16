@@ -613,22 +613,6 @@ class TraktSyncManager @Inject constructor(
         }
     }
 
-    /** Mark IDs as pending deletion so the sync poll doesn't re-add them. */
-    fun markPendingDelete(ids: List<String>) {
-        for (id in ids) {
-            pendingDeletes.add(id)
-            pendingDeletes.add(normalizePlaybackId(id))
-        }
-    }
-
-    /** Remove IDs from pending deletion (e.g., user hit undo). */
-    fun unmarkPendingDelete(ids: List<String>) {
-        for (id in ids) {
-            pendingDeletes.remove(id)
-            pendingDeletes.remove(normalizePlaybackId(id))
-        }
-    }
-
     /** Reset stored activity timestamps (e.g., on profile switch). */
     fun resetActivityState() {
         lastWatchlistActivity = null

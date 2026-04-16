@@ -1536,6 +1536,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 } else {
                                     stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                    TorrentService.clearCallbacks()
                                     uiScope.launch {
                                         mainViewModel.persistActiveProfileState()
                                         selectedPlaybackId = playbackId
@@ -1928,6 +1929,7 @@ class MainActivity : ComponentActivity() {
                                                 startService(intent)
                                             } else {
                                                 stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                                TorrentService.clearCallbacks()
                                                 selectedPlaybackId = nextPlaybackId
                                                 selectedPlaybackType = "series"
                                                 selectedPlaybackTitle = nextPlaybackTitle
@@ -2095,6 +2097,7 @@ class MainActivity : ComponentActivity() {
                                                 startService(intent)
                                             } else {
                                                 stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                                TorrentService.clearCallbacks()
                                                 selectedPlaybackId = epPlaybackId
                                                 selectedPlaybackType = "series"
                                                 selectedPlaybackTitle = epTitle
@@ -2186,6 +2189,7 @@ class MainActivity : ComponentActivity() {
                                             startService(intent)
                                         } else {
                                             stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                            TorrentService.clearCallbacks()
                                             selectedPlaybackId = pending.playbackId
                                             selectedPlaybackType = "series"
                                             selectedPlaybackTitle = pending.playbackTitle
@@ -2230,6 +2234,7 @@ class MainActivity : ComponentActivity() {
                                         rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true
                                     )
                                     stopService(Intent(this@MainActivity, TorrentService::class.java))
+                                    TorrentService.clearCallbacks()
                                     if (selectedPlaybackId.startsWith("trailer_")) {
                                         trailerReturnToken++
                                     }

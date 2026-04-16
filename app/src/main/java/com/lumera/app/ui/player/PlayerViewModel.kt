@@ -1,5 +1,6 @@
 package com.lumera.app.ui.player
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumera.app.data.local.AddonDao
@@ -59,7 +60,11 @@ class PlayerViewModel @Inject constructor(
                 watched = isCompleted,
                 scrobbled = existing?.scrobbled ?: traktScrobbleManager.isScrobbled(id)
             )
-            dao.upsertHistory(entry)
+            try {
+                dao.upsertHistory(entry)
+            } catch (t: Throwable) {
+                Log.e("PlayerViewModel", "Failed to save progress", t)
+            }
         }
     }
 

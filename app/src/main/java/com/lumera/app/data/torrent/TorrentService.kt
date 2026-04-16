@@ -34,6 +34,18 @@ class TorrentService : Service() {
         var onStreamReady: ((String) -> Unit)? = null
         var onStreamError: ((String) -> Unit)? = null
         var onStreamProgress: ((TorrentProgress) -> Unit)? = null
+
+        /**
+         * Clear all static stream callbacks. Call this from the UI layer when
+         * detaching (e.g. leaving the player screen or stopping the service) so
+         * Activity/ViewModel references captured by the lambdas are not held
+         * for the lifetime of the companion object.
+         */
+        fun clearCallbacks() {
+            onStreamReady = null
+            onStreamError = null
+            onStreamProgress = null
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -133,7 +145,9 @@ class TorrentService : Service() {
                                 )
                             )
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        android.util.Log.w("TorrentService", "Progress poll failed", e)
+                    }
                 }
             } catch (e: CancellationException) {
                 if (BuildConfig.DEBUG) Log.d(TAG, "Download coroutine cancelled")
@@ -228,9 +242,7 @@ class TorrentService : Service() {
         }
         currentMagnet = null
         job.cancel()
-        onStreamReady = null
-        onStreamError = null
-        onStreamProgress = null
+        clearCallbacks()
         super.onDestroy()
     }
 

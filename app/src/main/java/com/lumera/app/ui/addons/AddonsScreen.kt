@@ -267,7 +267,7 @@ fun AddonsScreen(
             onUrlReceived = { url ->
                 urlInput = url
                 showRemotePaste = false
-                kotlinx.coroutines.MainScope().launch {
+                scope.launch {
                     delay(150)
                     installButtonFocus.requestFocus()
                 }

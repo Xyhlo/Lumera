@@ -1303,6 +1303,7 @@ fun CinematicBackground(item: MetaItem?) {
                             .data(image)
                             .crossfade(false)
                             .size(1920, 1080)
+                            .allowHardware(true)
                             .build()
                     }
 

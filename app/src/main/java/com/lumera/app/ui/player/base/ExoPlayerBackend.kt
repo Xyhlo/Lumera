@@ -828,10 +828,12 @@ class ExoPlayerBackend(
     }
 
     override fun release() {
+        if (released) return
         released = true
         frameRateManager?.restoreOriginalMode()
         assHandler?.release()
         assHandler = null
+        onMagnetSourceSelected = null
 
         scopeJob.cancel()
         stopProgressLoop()
